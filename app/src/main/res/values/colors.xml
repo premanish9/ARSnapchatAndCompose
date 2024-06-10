@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#500253</color>
+    <color name="colorPrimaryDark">#390233</color>
+    <color name="colorAccent">#8F0479</color>
+    <color name="skyblue1">#FF4FE0F3</color>
+    <color name="skyblue2">#17DBF4</color>
+    <color name="skyblue3">#027A8A</color>
+    <color name="OrangeYellow1">#F67E58</color>
+    <color name="OrangeYellow2">#F14F1B</color>
+    <color name="OrangeYellow3">#9F2C08</color>
+    <color name="LightGreen1">#8BC34A</color>
+    <color name="LightGreen2">#8BC34A</color>
+    <color name="LightGreen3">#8BC34A</color>
+    <color name="Beige1">#E1DCDC</color>
+    <color name="Beige2">#B8A6A6</color>
+    <color name="Beige3">#785B5B</color>
+    <color name="notepadtool">#6750A4</color>
+</resources>
