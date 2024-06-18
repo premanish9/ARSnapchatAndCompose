@@ -3,7 +3,6 @@ package com.example.arsnapchat
 
 import android.app.Activity
 import android.content.Context
-import android.content.res.AssetManager
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -43,10 +42,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -61,6 +57,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,12 +77,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
+import coil.compose.rememberAsyncImagePainter
 import coil.compose.rememberImagePainter
 import com.example.arsnapchat.ui.theme.ARSnapchatTheme
 import com.github.skydoves.colorpicker.compose.AlphaSlider
@@ -97,13 +94,14 @@ import kotlin.math.abs
 
 
 class DesignActivity : ComponentActivity() {
-    var intitalfont:String=""
-    var mcontext:Context?=null
+    var intitalfont: String = ""
+    var mcontext: Context? = null
+
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        mcontext=this
+        mcontext = this
 
         setContent {
             ARSnapchatTheme {
@@ -563,7 +561,8 @@ fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable@ExperimentalFoundationApi
+@Composable
+@ExperimentalFoundationApi
 fun NotepadDesign(name: String, modifier: Modifier = Modifier) {
 
     // HomeSccreen() this is the most outer box that will
@@ -588,18 +587,28 @@ fun NotepadDesign(name: String, modifier: Modifier = Modifier) {
 fun ToolbarSection() {
 
     var selectedColor by remember { mutableStateOf(Color.Black) }
+    var selectedBackgroundColor by remember { mutableStateOf(Color.White) }
+    var selectedColorPickerfor by remember {
+        mutableStateOf(3)
+    }
     var selectedFont by remember { mutableStateOf("Cantataone") }
     var showColorPicker by remember { mutableStateOf(false) } // State to toggle between views
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var contents by remember { mutableStateOf(listOf<Content>()) }
 
 
+
+    var shouldShowDialog by remember { mutableStateOf(false) }
+    val imageList = listOf(R.drawable.blue,R.drawable.brown,R.drawable.gold,R.drawable.yellow)
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
-            selectedImageUri = uri
-            contents = contents + Content.Image(uri!!)
-            Log.i("DesignActivity","selectedImageUri $selectedImageUri")
+            if (uri!=null) {
+                selectedImageUri = uri
+                contents = contents + Content.Image(uri)
+            }
+            Log.i("DesignActivity", "selectedImageUri $selectedImageUri $uri")
         }
     )
 
@@ -618,7 +627,7 @@ fun ToolbarSection() {
                 .padding(top = 5.dp, bottom = 10.dp)
         ) {
             Text(
-                text = "Notepad",
+                text = "Wordpad",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
                 modifier = Modifier.padding(end = 40.dp, start = 20.dp)
@@ -634,24 +643,46 @@ fun ToolbarSection() {
                     BottomMenuContent("videos", R.drawable.baseline_save_24),
                     BottomMenuContent("Profile", R.drawable.baseline_print_24),
                     BottomMenuContent("Profile", R.drawable.baseline_more_vert_24),
-                ), modifier = Modifier.align(Alignment.CenterVertically),onFontChange = { selectedFont = it }, onColorChange = { selectedColor = it }, onShowColorPicker = {showColorPicker=it},imagePickerLauncher
+                ),
+                modifier = Modifier.align(Alignment.CenterVertically),
+                onFontChange = { selectedFont = it },
+                onColorPickerFor = { selectedColorPickerfor = it },
+                onShowBackImageDialog = { shouldShowDialog = it },
+                onShowColorPicker = { showColorPicker = it },
+                imagePickerLauncher
             )
 
         }
 
         if (showColorPicker) {
-            colorPicker(onColorChange = {selectedColor=it},onShowColorPicker = {showColorPicker=it})
-        }else{
-          //  EditorScreen(selectedColor,selectedFont)
+            if (selectedColorPickerfor==0) {
+                colorPicker(
+                    onColorChange = { selectedColor = it },
+                    onShowColorPicker = { showColorPicker = it })
+            }else{
+                colorPicker(
+                    onColorChange = { selectedBackgroundColor = it },
+                    onShowColorPicker = { showColorPicker = it })
+            }
+        } else {
+            //  EditorScreen(selectedColor,selectedFont)
 
-            EditorScreen(selectedColor, selectedFont, contents, onTextChange = { contents = it })
+            EditorScreen(
+                selectedColor,
+                selectedFont,
+                selectedBackgroundColor,
+                contents,
+                onTextChange = { contents = it },
+                shouldShowDialog,
+                onShowBackImageDialog = { shouldShowDialog = it },
+                imageList
+            )
         }
 
 
     }
 
 }
-
 
 
 @Composable
@@ -671,7 +702,11 @@ fun RequestPermissions() {
         val allPermissionsGranted = permissionsMap.entries.all { it.value }
         if (!allPermissionsGranted) {
             // Handle the case where some permissions are not granted
-            Toast.makeText(context, "Permissions are required for this app to function", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "Permissions are required for this app to function",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -682,35 +717,52 @@ fun RequestPermissions() {
 
 
 @Composable
-fun colorPicker(onColorChange: (Color) -> Unit,onShowColorPicker: (Boolean) -> Unit,){
+fun colorPicker(onColorChange: (Color) -> Unit, onShowColorPicker: (Boolean) -> Unit) {
     // on below line we are creating a variable for controller
-    val controller= rememberColorPickerController()
+    val controller = rememberColorPickerController()
 
     // on below line we are creating a column,
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .padding(top = 250.dp, start = 30.dp, end = 30.dp)) {
-        Row (modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically){
-            AlphaTile(modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp)
-                .clip(RoundedCornerShape(6.dp)),controller=controller)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 250.dp, start = 30.dp, end = 30.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AlphaTile(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(6.dp)), controller = controller
+            )
         }
-        
+
         HsvColorPicker(modifier = Modifier
             .fillMaxWidth()
             .height(350.dp)
-            .padding(10.dp), controller = controller, onColorChanged = {colorEnvelope -> onColorChange(colorEnvelope.color) })
-        
-        AlphaSlider(modifier = Modifier
-            .fillMaxWidth()
-            .padding(10.dp)
-            .height(35.dp), controller = controller, tileOddColor = Color.White, tileEvenColor = Color.Black)
-        
-        BrightnessSlider(modifier = Modifier
-            .fillMaxWidth()
-            .padding(10.dp)
-            .height(35.dp), controller = controller)
+            .padding(10.dp),
+            controller = controller,
+            onColorChanged = { colorEnvelope -> onColorChange(colorEnvelope.color) })
+
+        AlphaSlider(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp)
+                .height(35.dp),
+            controller = controller,
+            tileOddColor = Color.White,
+            tileEvenColor = Color.Black
+        )
+
+        BrightnessSlider(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp)
+                .height(35.dp), controller = controller
+        )
 
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -724,8 +776,6 @@ fun colorPicker(onColorChange: (Color) -> Unit,onShowColorPicker: (Boolean) -> U
 }
 
 
-
-
 sealed class Content {
     data class Text(val text: String) : Content()
     data class Image(val uri: Uri) : Content()
@@ -737,46 +787,68 @@ sealed class Content {
 fun EditorScreen(
     selectedColor: Color,
     selectedFont: String,
+    selectedBackgroundColor:Color,
     contents: List<Content>,
-    onTextChange: (List<Content>) -> Unit
+    onTextChange: (List<Content>) -> Unit,
+    shouldShowDialog: Boolean,
+    onShowBackImageDialog: (Boolean) -> Unit,
+    imageList: List<Int>
 ) {
     var textInput by remember { mutableStateOf("Type here...") }
     var fontSize by remember { mutableStateOf(10.sp) }
     var isBold by remember { mutableStateOf(false) }
     var isItalic by remember { mutableStateOf(false) }
+
+    var onImageSelectURL by remember {
+        mutableStateOf(0)
+    }
+
+
+
+
 // Remember the scroll state
     val scrollState = rememberScrollState()
 
 
-    val fontInt=getFontListFromAssets().get(selectedFont)
+    val fontInt = getFontListFromAssets().get(selectedFont)
+
+    var backgroundcolor=selectedBackgroundColor
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 50.dp, start = 0.dp,end=0.dp,bottom=0.dp)
-            // Ensure the entire Box is scrollable
+            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
+        // Ensure the entire Box is scrollable
     ) {
 
         // Background image
-        /*Image(
-            painter = rememberImagePainter(data = R.drawable.app_background),
+        if (onImageSelectURL>1) {
+            Log.i("DesignActivity", "ImageListAlertDialog $onImageSelectURL")
+            backgroundcolor=Color.Transparent
+            Image(
+                painter = painterResource(id = onImageSelectURL),
             contentDescription = null,
             contentScale = ContentScale.Crop, // Scale the image to fill the Box
-            contentScale = ContentScale.Crop, // Scale the image to fill the Box
+//            contentScale = ContentScale.Crop, // Scale the image to fill the Box
             modifier = Modifier.fillMaxSize()
-        )*/
+        )
+        }else{
+            backgroundcolor=selectedBackgroundColor
+        }
 
+
+        ImageListAlertDialog(shouldShowDialog,onDismiss = { onShowBackImageDialog(false) }, onImageSelectedUrl = {onImageSelectURL=it},imageList)
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.White)
+                .background(backgroundcolor)
             //verticalScroll(scrollState)
         ) {
 
             Slider(
                 value = fontSize.value,
-                onValueChange = { fontSize=it.sp },
+                onValueChange = { fontSize = it.sp },
                 valueRange = 10f..30f,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
@@ -790,7 +862,7 @@ fun EditorScreen(
                             fontSize = fontSize,
                             fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
                             fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
-                            fontFamily =FontFamily(
+                            fontFamily = FontFamily(
                                 Font(fontInt!!, FontWeight.Thin)
                             )
                         ),
@@ -805,7 +877,7 @@ fun EditorScreen(
                 ) {
                     items(contents.filterIsInstance<Content.Image>()) { content ->
                         Image(
-                            painter = rememberImagePainter(data = content.uri),
+                            painter = rememberAsyncImagePainter(model = content.uri),
                             contentDescription = null,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -821,10 +893,9 @@ fun EditorScreen(
                     onValueChange = { textInput = it },
                     modifier = Modifier
                         .fillMaxSize()
-                        .border(0.5.dp,Color.White)
-                       ,
+                        .border(0.5.dp, Color.White),
                     colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.White, // Change background color to white
+                        containerColor = backgroundcolor, // Change background color to white
                         cursorColor = Color.Black // Change cursor color to black (optional)
                     ),
                     textStyle = TextStyle(
@@ -853,9 +924,10 @@ fun BottomMenuColumn(
     items: List<BottomMenuContent>,
     modifier: Modifier = Modifier,
     onFontChange: (String) -> Unit,
-    onColorChange: (Color) -> Unit,
-    onShowColorPicker:(Boolean) -> Unit,
-    imagePickerLauncher:ManagedActivityResultLauncher<String,Uri?>,
+    onColorPickerFor: (Int) -> Unit,
+    onShowBackImageDialog: (Boolean) -> Unit,
+    onShowColorPicker: (Boolean) -> Unit,
+    imagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     activeHighlightColor: Color = Color.Green,
     activeTextColor: Color = Color.White,
     inactiveTextColor: Color = Color.White,
@@ -885,13 +957,10 @@ fun BottomMenuColumn(
                 inactiveTextColor = inactiveTextColor
             ) {
                 selectedItemIndex = index
-                if (selectedItemIndex==0 || selectedItemIndex==1 || selectedItemIndex == 5) {
-                    expanded = true
-                }else{
-                    expanded=false
-                }
+                expanded =
+                    selectedItemIndex == 0 || selectedItemIndex == 1 || selectedItemIndex == 5
 
-                if (selectedItemIndex!=5)
+                if (selectedItemIndex == 2)
                     onShowColorPicker(false)
                 Log.i("DEsignActivity", "index" + index + selectedItemIndex)
 
@@ -907,25 +976,26 @@ fun BottomMenuColumn(
         expanded = expanded,
         onDismissRequest = { expanded = false },
         offset = if (selectedItemIndex == 1) DpOffset(dropdownOffset, 5.dp)
-        else DpOffset(dropdownOffset + (selectedItemIndex*50).dp, 5.dp) // Adjust the offset for above position
+        else DpOffset(
+            dropdownOffset + (selectedItemIndex * 50).dp,
+            5.dp
+        ) // Adjust the offset for above position
 
         ,
         properties = PopupProperties(dismissOnClickOutside = false)
     ) {
         Log.i("DesignActivity", "DropdownMenu $selectedItemIndex")
 
-        if (selectedItemIndex!=5)
-        onShowColorPicker(false)
+       /* if (selectedItemIndex != 5) {
+            onShowColorPicker(false)
+        }*/
 
         val fontList = getFontListFromAssets()
-        val listFont=ArrayList<BottomMenuContent>()
+        val listFont = ArrayList<BottomMenuContent>()
 
         fontList.forEach { fontName ->
             listFont.add(BottomMenuContent(fontName.key, fontName.value))
         }
-
-
-
 
 
         // Determine dropdown items based on selected index
@@ -955,20 +1025,26 @@ fun BottomMenuColumn(
                 onClick = {
                     expanded = false
                     Log.i("DesignActivity", "Dropdown item ${item.title} clicked")
-                 //   changeEditorScreenProperties(selectedItemIndex,item.title,selectedColor,selectedFont)
-                    if (selectedItemIndex==0){
+                    //   changeEditorScreenProperties(selectedItemIndex,item.title,selectedColor,selectedFont)
+                    if (selectedItemIndex == 0) {
                         Log.i("DesignActivity", "onfontchange")
                         onFontChange(item.title)
                     }
 
-                    if (item.title.contains("Color Picker")){
+                    if (item.title.contains("Color Picker")) {
                         onShowColorPicker(true)
-                    }else if (item.title.contains("Image")){
+                        onColorPickerFor(0)
+                    } else if (item.title.equals("Image")) {
                         imagePickerLauncher.launch("image/*")
+                    } else if (item.title.equals("Background Image")) {
+                        onShowBackImageDialog(true)
+                    }else if(item.title.equals("Background Color")){
+                        onShowColorPicker(true)
+                        onColorPickerFor(1)
                     }
                 },
                 leadingIcon = {
-                    if (selectedItemIndex!=0) {
+                    if (selectedItemIndex != 0) {
                         Icon(
                             painter = painterResource(id = item.iconId),
                             contentDescription = item.title,
@@ -978,7 +1054,7 @@ fun BottomMenuColumn(
                 },
                 text =
                 {
-                    if (selectedItemIndex==0) {
+                    if (selectedItemIndex == 0) {
                         Text(
                             item.title, style = TextStyle(
                                 fontFamily = when (item.title) {
@@ -990,10 +1066,10 @@ fun BottomMenuColumn(
                                 }
                             )
                         )
-                    }else{
+                    } else {
                         Text(
                             item.title, style = TextStyle(
-                                fontFamily =  FontFamily.Default
+                                fontFamily = FontFamily.Default
                             )
                         )
                     }
@@ -1007,13 +1083,17 @@ fun BottomMenuColumn(
 }
 
 
-fun getFontListFromAssets(): HashMap<String,Int> {
-    val hashMap=HashMap<String,Int>()
-    hashMap.put("Bevan",R.font.bevan)
-    hashMap.put("Cantataone",R.font.cantataone_regular)
-    hashMap.put("CaslonAntique",R.font.caslonantique)
-    hashMap.put("Poppins",R.font.poppins_black)
-    hashMap.put("Sumana",R.font.sumana_bold)
+fun getFontListFromAssets(): HashMap<String, Int> {
+    val hashMap = HashMap<String, Int>()
+    hashMap.put("Bevan", R.font.bevan)
+    hashMap.put("Cantataone", R.font.cantataone_regular)
+    hashMap.put("CaslonAntique", R.font.caslonantique)
+    hashMap.put("Poppins", R.font.poppins_black)
+    hashMap.put("Sumana", R.font.sumana_bold)
+    hashMap.put("BilloDream",R.font.billodream)
+    hashMap.put("GoldyPersonal",R.font.goldypersonal)
+    hashMap.put("KakeKake",R.font.kakekae)
+    hashMap.put("OrganicPerson",R.font.organicperson)
 
 
     return hashMap
@@ -1056,6 +1136,58 @@ fun BottomMenuItemNotepad(
 
 }
 
+
+@Composable
+fun ImageListAlertDialog(
+    shouldShowDialog: Boolean,
+    onDismiss: () -> Unit,
+    onImageSelectedUrl: (Int) -> Unit,
+    imageList: List<Int>
+) {
+
+    if (shouldShowDialog) {
+        AlertDialog(
+            onDismissRequest = { /*shouldShowDialog = false*/ },
+            title = { Text(text = "Choose background")},
+            text = {
+
+                // Display image contents in a LazyVerticalGrid
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(imageList) { content ->
+                        Image(
+                            painter = painterResource(id = content),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillBounds,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clickable {
+                                    onImageSelectedUrl(content)
+                                    onDismiss()
+                                }
+                                .padding(bottom = 8.dp)
+                        )
+                    }
+                }
+
+
+
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onImageSelectedUrl(1)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
 
 
 @Composable
