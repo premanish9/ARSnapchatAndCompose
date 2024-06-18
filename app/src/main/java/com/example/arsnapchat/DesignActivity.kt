@@ -3,6 +3,7 @@ package com.example.arsnapchat
 
 import android.app.Activity
 import android.content.Context
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -14,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -50,6 +52,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -66,8 +69,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -76,6 +82,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
@@ -595,6 +602,7 @@ fun ToolbarSection() {
     var showColorPicker by remember { mutableStateOf(false) } // State to toggle between views
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var contents by remember { mutableStateOf(listOf<Content>()) }
+    var barChartData by remember { mutableStateOf<BarChartData?>(null) }
 
 
 
@@ -649,7 +657,9 @@ fun ToolbarSection() {
                 onColorPickerFor = { selectedColorPickerfor = it },
                 onShowBackImageDialog = { shouldShowDialog = it },
                 onShowColorPicker = { showColorPicker = it },
-                imagePickerLauncher
+                imagePickerLauncher= imagePickerLauncher,
+                barChartData = barChartData,
+                onBarChartDataChange = { barChartData = it }
             )
 
         }
@@ -675,7 +685,8 @@ fun ToolbarSection() {
                 onTextChange = { contents = it },
                 shouldShowDialog,
                 onShowBackImageDialog = { shouldShowDialog = it },
-                imageList
+                imageList,
+                barChartData = barChartData
             )
         }
 
@@ -792,7 +803,8 @@ fun EditorScreen(
     onTextChange: (List<Content>) -> Unit,
     shouldShowDialog: Boolean,
     onShowBackImageDialog: (Boolean) -> Unit,
-    imageList: List<Int>
+    imageList: List<Int>,
+    barChartData: BarChartData? = null
 ) {
     var textInput by remember { mutableStateOf("Type here...") }
     var fontSize by remember { mutableStateOf(10.sp) }
@@ -887,6 +899,12 @@ fun EditorScreen(
                     }
                 }
 
+                //display bar-chart
+                barChartData?.let { data ->
+                    Log.d("Barchartdatwa","$data ---dataPoints" )
+                    BarChart(data.labels, data.dataPoints)
+                }
+
                 // Text input field
                 TextField(
                     value = textInput,
@@ -931,7 +949,9 @@ fun BottomMenuColumn(
     activeHighlightColor: Color = Color.Green,
     activeTextColor: Color = Color.White,
     inactiveTextColor: Color = Color.White,
-    initialSelectedItemIndex: Int = 0
+    initialSelectedItemIndex: Int = 0,
+    barChartData: BarChartData? = null,
+    onBarChartDataChange: (BarChartData) -> Unit
 ) {
     var selectedItemIndex by remember {
         mutableStateOf(initialSelectedItemIndex)
@@ -940,6 +960,7 @@ fun BottomMenuColumn(
     var expanded by remember {
         mutableStateOf(false)
     }
+    var showDialog by remember { mutableStateOf(false) }
     Row(
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically,
@@ -963,7 +984,9 @@ fun BottomMenuColumn(
                 if (selectedItemIndex == 2)
                     onShowColorPicker(false)
                 Log.i("DEsignActivity", "index" + index + selectedItemIndex)
-
+                if (item.title.equals("Bar Chart")) {
+                    showDialog = true
+                }
             }
 
         }
@@ -1041,7 +1064,9 @@ fun BottomMenuColumn(
                     }else if(item.title.equals("Background Color")){
                         onShowColorPicker(true)
                         onColorPickerFor(1)
-                    }
+                    }else if (item.title.equals("Bar Chart")) {
+                    showDialog = true
+                }
                 },
                 leadingIcon = {
                     if (selectedItemIndex != 0) {
@@ -1079,8 +1104,131 @@ fun BottomMenuColumn(
         }
 
     }
+    if (showDialog) {
+        BarChartInputDialog(
+            onDismiss = { showDialog = false },
+            onConfirm = { labels, dataPoints ->
+                onBarChartDataChange(BarChartData(labels, dataPoints))
+                showDialog = false
+            }
+        )
+    }
 
 }
+
+@Composable
+fun BarChart(labels: List<String>, dataPoints: List<Float>) {
+    Log.d("Barchartdata", "$labels ---$dataPoints")
+    val maxValue = dataPoints.maxOrNull() ?: 0f
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .padding(bottom = 5.dp)
+    ) {
+        Text(
+            "",
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+        ) {
+            val gap = 2.dp.toPx()
+            val totalGapsWidth = gap * (labels.size - 1)
+            val barWidth = (size.width / labels.size) - 5.dp.toPx() // Subtract 5dp from each bar width for gap
+            val maxValueHeight = size.height
+
+            // Draw Y-axis line
+            drawLine(
+                color = Color.Black,
+                start = Offset(0f, 0f),
+                end = Offset(0f, maxValueHeight + 2),
+                strokeWidth = 2.dp.toPx()
+            )
+
+            // Draw X-axis line
+            drawLine(
+                color = Color.Black,
+                start = Offset(0f, maxValueHeight),
+                end = Offset(size.width, maxValueHeight+ 3),
+                strokeWidth = 2.dp.toPx()
+            )
+
+            dataPoints.forEachIndexed { index, dataPoint ->
+                val barHeight = (dataPoint / maxValue) * maxValueHeight
+                drawRect(
+                    color = Color.Blue,
+                    topLeft = Offset(index * (barWidth + gap), maxValueHeight - barHeight),
+                    size = Size(barWidth, barHeight)
+                )
+
+                // Draw text below each bar
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        labels[index],
+                        index * (barWidth + gap) + (barWidth / 2), // center text horizontally under the bar
+                        maxValueHeight + 16.dp.toPx(), // position text below the bars
+                        Paint().apply {
+                            textAlign = Paint.Align.CENTER
+                            color = android.graphics.Color.BLACK
+                            textSize = 14.sp.toPx() // convert sp to px
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BarChartInputDialog(onDismiss: () -> Unit, onConfirm: (List<String>, List<Float>) -> Unit) {
+    var labels by remember { mutableStateOf("") }
+    var dataPoints by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { onDismiss() },
+        title = { Text(text = "Bar Chart Data") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = labels,
+                    onValueChange = { labels = it },
+                    label = { Text("Labels (comma-separated)") }
+                )
+                OutlinedTextField(
+                    value = dataPoints,
+                    onValueChange = { dataPoints = it },
+                    label = { Text("Data Points (comma-separated)") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val labelsList = labels.split(",").map { it.trim() }
+                    val dataPointsList = dataPoints.split(",").map { it.trim().toFloatOrNull() ?: 0f }
+                    onConfirm(labelsList, dataPointsList)
+                }
+            ) {
+                Text("OK")
+            }
+        },
+        dismissButton = {
+            Button(onClick = { onDismiss() }) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 
 
 fun getFontListFromAssets(): HashMap<String, Int> {

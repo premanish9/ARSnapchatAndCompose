@@ -8,5 +8,9 @@ data class Course(val title:String,
     val lightColor: Color,
     val mediumColor: Color,
     val darkColor:Color)
+data class BarChartData(
+    val labels: List<String>,
+    val dataPoints: List<Float>
+)
 
 
