@@ -658,8 +658,6 @@ fun ToolbarSection() {
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
 
-
-
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
@@ -685,8 +683,11 @@ fun ToolbarSection() {
             uri?.let {
                 val mimeType = context.contentResolver.getType(it)
                 when {
-                    mimeType?.startsWith("audio/") == true -> contents = contents + Content.Audio(it)
-                    mimeType?.startsWith("video/") == true -> contents = contents + Content.Video(it)
+                    mimeType?.startsWith("audio/") == true -> contents =
+                        contents + Content.Audio(it)
+
+                    mimeType?.startsWith("video/") == true -> contents =
+                        contents + Content.Video(it)
                 }
             }
         }
@@ -753,11 +754,11 @@ fun ToolbarSection() {
                 onFontSizeChange = { selectedFontSize = it.sp },
                 onBoldChange = { isBold = it },
                 onItalicChange = { isItalic = it },
-                onImageSelectURL = {onImageSelectURL=it},
+                onImageSelectURL = { onImageSelectURL = it },
                 selectedImageURL = onImageSelectURL,
-                selectedImageURI=selectedBgUri,
-                onImageSelectedURI={selectedBgUri=it},
-                onSetBgImage={setBgImage=it}
+                selectedImageURI = selectedBgUri,
+                onImageSelectedURI = { selectedBgUri = it },
+                onSetBgImage = { setBgImage = it }
 
             )
 
@@ -796,7 +797,7 @@ fun ToolbarSection() {
                         contents = replaceTextAtIndex(contents, index, it)
                     }
                 },
-                onImageSelectURL = {onImageSelectURL=it},
+                onImageSelectURL = { onImageSelectURL = it },
                 selectedImageURL = onImageSelectURL,
                 shouldShowDialog,
                 onShowBackImageDialog = { shouldShowDialog = it },
@@ -808,7 +809,7 @@ fun ToolbarSection() {
                 barChartData = barChartData,
                 selectedBgUri,
                 setBgImage,
-                onSetBgImage={setBgImage=it}
+                onSetBgImage = { setBgImage = it }
             )
         }
 
@@ -947,8 +948,8 @@ fun EditorScreen(
     onBoldChange: (Boolean) -> Unit,
     onItalicChange: (Boolean) -> Unit,
     onTextChange: (String) -> Unit,
-    onImageSelectURL:(Int)->Unit,
-    selectedImageURL:Int,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
     shouldShowDialog: Boolean,
     onShowBackImageDialog: (Boolean) -> Unit,
     openImagePicker: (Boolean) -> Unit,
@@ -956,11 +957,11 @@ fun EditorScreen(
     barChartData: BarChartData? = null,
     selectedImageUri: Uri?,
     setBgImage: Boolean,
-    onSetBgImage:(Boolean)->Unit
+    onSetBgImage: (Boolean) -> Unit
 ) {
     var textInput by remember { mutableStateOf("Type here...") }
-    var isBold1 by remember { mutableStateOf(false) }
     var fontSize by remember { mutableStateOf(10.sp) }
+    var isBold1 by remember { mutableStateOf(false) }
     var isItalic1 by remember { mutableStateOf(false) }
     var isUnderline by remember { mutableStateOf(false) }
 
@@ -968,13 +969,13 @@ fun EditorScreen(
      var isBold by remember { mutableStateOf(false) }
      var isItalic by remember { mutableStateOf(false) }*/
 
-   /* var onImageSelectURL by remember {
-        mutableStateOf(0)
-    }*/
+    /* var onImageSelectURL by remember {
+         mutableStateOf(0)
+     }*/
 
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU",isKeyboardVisible.toString())
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
 
     KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
         isKeyboardVisible.value = isVisible
@@ -1004,7 +1005,7 @@ fun EditorScreen(
 
 
         } else if (selectedImageURL == 3) {
-           // onSetBgImage(true)
+            // onSetBgImage(true)
 
             if (setBgImage) {
                 backgroundcolor = Color.Transparent
@@ -1035,7 +1036,7 @@ fun EditorScreen(
         ImageListAlertDialog(
             shouldShowDialog,
             onDismiss = { onShowBackImageDialog(false) },
-            onImageSelectedUrl = { onImageSelectURL( it) },
+            onImageSelectedUrl = { onImageSelectURL(it) },
             pickfromGallery = { onSetBgImage(it) },
             imageList
         )
@@ -1060,21 +1061,21 @@ fun EditorScreen(
 
 
                 // Display image contents in a LazyVerticalGrid
-               /* LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents.filterIsInstance<Content.Image>()) { content ->
-                        Image(
-                            painter = rememberAsyncImagePainter(model = content.uri),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .padding(bottom = 8.dp)
-                        )
-                    }
-                }*/
+                /* LazyVerticalGrid(
+                     columns = GridCells.Adaptive(minSize = 100.dp),
+                     modifier = Modifier.fillMaxWidth()
+                 ) {
+                     items(contents.filterIsInstance<Content.Image>()) { content ->
+                         Image(
+                             painter = rememberAsyncImagePainter(model = content.uri),
+                             contentDescription = null,
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .height(200.dp)
+                                 .padding(bottom = 8.dp)
+                         )
+                     }
+                 }*/
                 // Display image, audio, and video contents in a LazyVerticalGrid
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
@@ -1092,6 +1093,7 @@ fun EditorScreen(
                                         .padding(bottom = 8.dp)
                                 )
                             }
+
                             is Content.Audio -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1108,12 +1110,13 @@ fun EditorScreen(
                                     )
                                     val context = LocalContext.current
                                     Text(
-                                        text = getFileNameFromUri(context,content.uri),
+                                        text = getFileNameFromUri(context, content.uri),
                                         textAlign = TextAlign.Center,
                                         style = TextStyle(fontSize = 14.sp)
                                     )
                                 }
                             }
+
                             is Content.Video -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1131,7 +1134,7 @@ fun EditorScreen(
                                     )
                                     val context = LocalContext.current
                                     Text(
-                                        text = getFileNameFromUri(context,content.uri),
+                                        text = getFileNameFromUri(context, content.uri),
                                         textAlign = TextAlign.Center,
                                         style = TextStyle(fontSize = 14.sp)
                                     )
@@ -1153,25 +1156,43 @@ fun EditorScreen(
                         modifier = Modifier
                             .background(Color.LightGray)
                     ) {
-                        IconButton(onClick = { isBold1 = !isBold1 },
-                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_bold_24), contentDescription = "Bold")
+                        IconButton(
+                            onClick = { isBold1 = !isBold1 },
+                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_bold_24),
+                                contentDescription = "Bold"
+                            )
                         }
-                        IconButton(onClick = { isItalic1 = !isItalic1 },
-                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_italic_24), contentDescription = "Italic")
+                        IconButton(
+                            onClick = { isItalic1 = !isItalic1 },
+                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_italic_24),
+                                contentDescription = "Italic"
+                            )
                         }
-                        IconButton(onClick = { isUnderline = !isUnderline},
-                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_underlined_24), contentDescription = "Underline")
+                        IconButton(
+                            onClick = { isUnderline = !isUnderline },
+                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_underlined_24),
+                                contentDescription = "Underline"
+                            )
                         }
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxSize()) {
+               /* Column(modifier = Modifier.fillMaxSize()) {
                     TextField(
                         value = textInput,
-                        onValueChange = { textInput = it },
+                        onValueChange = {
+                            textInput = it,
+                            onTextChange(it)
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .border(0.5.dp, Color.White),
@@ -1190,9 +1211,9 @@ fun EditorScreen(
                             )
                         )
                     )
-                }
+                }*/
 
-                /*contents.filterIsInstance<Content.Text>().forEach { content ->
+                contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
                     // textInput=content.text
                     TextField(
@@ -1211,8 +1232,8 @@ fun EditorScreen(
                         ),
                         textStyle = TextStyle(
                             fontSize = selectedFontSize,
-                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
                             color = selectedColor,
                             fontFamily = FontFamily(
                                 Font(fontInt!!, FontWeight.Normal)
@@ -1237,16 +1258,17 @@ fun EditorScreen(
                             cursorColor = Color.Black // Change cursor color to black (optional)
                         ),
                         textStyle = TextStyle(
-                            fontSize = selectedFontSize,
-                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                            fontSize = fontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
                             color = selectedColor,
                             fontFamily = FontFamily(
                                 Font(fontInt!!, FontWeight.Normal)
                             )
                         )
                     )
-                }*/
+                }
             }
         }
     }
@@ -1277,6 +1299,7 @@ fun KeyboardVisibilityDetector(
         }
     }
 }
+
 fun getFileNameFromUri(context: Context, uri: Uri): String {
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -1285,6 +1308,7 @@ fun getFileNameFromUri(context: Context, uri: Uri): String {
     cursor?.close()
     return fileName
 }
+
 fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
     val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
     return FontFamily(typeface)
@@ -1323,10 +1347,10 @@ fun BottomMenuColumn(
     onFontSizeChange: (Float) -> Unit,
     onBoldChange: (Boolean) -> Unit,
     onItalicChange: (Boolean) -> Unit,
-    onImageSelectURL:(Int)->Unit,
-    selectedImageURL:Int,
-    selectedImageURI:Uri?,
-    onImageSelectedURI:(Uri?)->Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
+    selectedImageURI: Uri?,
+    onImageSelectedURI: (Uri?) -> Unit,
     onSetBgImage: (Boolean) -> Unit
 
 ) {
@@ -1444,8 +1468,8 @@ fun BottomMenuColumn(
                         onShowBackImageDialog(true)
                     } else if (item.title.equals("File")) {
                         filePickerLauncher.launch(arrayOf("audio/*", "video/*"))
-                    }else if (item.title.equals("Save")) {
-                        Log.i("DesignActivity","save $selectedImageURI")
+                    } else if (item.title.equals("Save")) {
+                        Log.i("DesignActivity", "save $selectedImageURI")
                         val editorContent = EditorContent(
                             texts = contents.filterIsInstance<Content.Text>().map {
                                 TextContent(
@@ -1455,8 +1479,8 @@ fun BottomMenuColumn(
                                     isBold = isBold,
                                     isItalic = isItalic,
                                     fontFamily = selectedFontFamily,
-                                    selectedImageURL=selectedImageURL,
-                                    selectedImageURI=selectedImageURI.toString()
+                                    selectedImageURL = selectedImageURL,
+                                    selectedImageURI = selectedImageURI.toString()
                                 )
                             },
                             images = contents.filterIsInstance<Content.Image>().map {
@@ -1481,13 +1505,13 @@ fun BottomMenuColumn(
                                 onTextChange(
                                     it.texts.get(0).text
                                 )
-                              //  imagePickerLauncher.launch("image/*")
+                                //  imagePickerLauncher.launch("image/*")
                                 onFontSizeChange(it.texts.get(0).fontSize)
                                 onFontChange(it.texts.get(0).fontFamily)
                                 onFontColorChange(it.texts.get(0).color)
                                 onImageSelectURL(it.texts.get(0).selectedImageURL)
                                 onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
-                                if (it.texts.get(0).selectedImageURI!=null){
+                                if (it.texts.get(0).selectedImageURI != null) {
                                     onSetBgImage(true)
                                 }
 
@@ -1554,7 +1578,6 @@ fun BottomMenuColumn(
     }
 
 }
-
 
 
 val gson = Gson()
