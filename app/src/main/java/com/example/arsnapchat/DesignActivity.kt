@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -107,6 +108,7 @@ import com.github.skydoves.colorpicker.compose.BrightnessSlider
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.google.gson.Gson
+import java.io.File
 import kotlin.math.abs
 
 
@@ -1114,6 +1116,12 @@ fun EditorScreen(
 fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
     val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
     return FontFamily(typeface)
+}
+
+@Composable
+fun LoadImageFromStorage(filePath: String): Painter {
+    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
+    return imagePainter
 }
 
 @Composable
