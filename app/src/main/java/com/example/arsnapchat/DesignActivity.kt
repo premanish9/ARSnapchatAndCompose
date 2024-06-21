@@ -4,10 +4,15 @@ package com.example.arsnapchat
 import android.app.Activity
 import android.content.Context
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Log
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -44,6 +49,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -51,6 +63,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -59,6 +72,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
@@ -71,11 +85,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -83,6 +102,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
@@ -605,18 +625,30 @@ fun ToolbarSection() {
     var barChartData by remember { mutableStateOf<BarChartData?>(null) }
 
 
-
     var shouldShowDialog by remember { mutableStateOf(false) }
-    val imageList = listOf(R.drawable.blue,R.drawable.brown,R.drawable.gold,R.drawable.yellow)
+    val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
-            if (uri!=null) {
+            if (uri != null) {
                 selectedImageUri = uri
                 contents = contents + Content.Image(uri)
             }
             Log.i("DesignActivity", "selectedImageUri $selectedImageUri $uri")
+        }
+    )
+    val context = LocalContext.current
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                val mimeType = context.contentResolver.getType(it)
+                when {
+                    mimeType?.startsWith("audio/") == true -> contents = contents + Content.Audio(it)
+                    mimeType?.startsWith("video/") == true -> contents = contents + Content.Video(it)
+                }
+            }
         }
     )
 
@@ -657,7 +689,8 @@ fun ToolbarSection() {
                 onColorPickerFor = { selectedColorPickerfor = it },
                 onShowBackImageDialog = { shouldShowDialog = it },
                 onShowColorPicker = { showColorPicker = it },
-                imagePickerLauncher= imagePickerLauncher,
+                imagePickerLauncher = imagePickerLauncher,
+                filePickerLauncher = filePickerLauncher,
                 barChartData = barChartData,
                 onBarChartDataChange = { barChartData = it }
             )
@@ -665,11 +698,11 @@ fun ToolbarSection() {
         }
 
         if (showColorPicker) {
-            if (selectedColorPickerfor==0) {
+            if (selectedColorPickerfor == 0) {
                 colorPicker(
                     onColorChange = { selectedColor = it },
                     onShowColorPicker = { showColorPicker = it })
-            }else{
+            } else {
                 colorPicker(
                     onColorChange = { selectedBackgroundColor = it },
                     onShowColorPicker = { showColorPicker = it })
@@ -790,6 +823,8 @@ fun colorPicker(onColorChange: (Color) -> Unit, onShowColorPicker: (Boolean) -> 
 sealed class Content {
     data class Text(val text: String) : Content()
     data class Image(val uri: Uri) : Content()
+    data class Audio(val uri: Uri) : Content()
+    data class Video(val uri: Uri) : Content()
 }
 
 
@@ -798,7 +833,7 @@ sealed class Content {
 fun EditorScreen(
     selectedColor: Color,
     selectedFont: String,
-    selectedBackgroundColor:Color,
+    selectedBackgroundColor: Color,
     contents: List<Content>,
     onTextChange: (List<Content>) -> Unit,
     shouldShowDialog: Boolean,
@@ -810,21 +845,39 @@ fun EditorScreen(
     var fontSize by remember { mutableStateOf(10.sp) }
     var isBold by remember { mutableStateOf(false) }
     var isItalic by remember { mutableStateOf(false) }
+    var isUnderline by remember { mutableStateOf(false) }
 
     var onImageSelectURL by remember {
         mutableStateOf(0)
     }
 
-
-
-
+    val isKeyboardVisible = remember { mutableStateOf(false) }
+    Log.d("isKeyboardVisibleU",isKeyboardVisible.toString())
+    // Observe keyboard visibility
+   /* val context = LocalContext.current
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val rect = Rect()
+            view.getWindowVisibleDisplayFrame(rect)
+            val screenHeight = view.height
+            val keypadHeight = screenHeight - rect.bottom
+            isKeyboardVisible.value = keypadHeight > screenHeight * 0.15
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose {
+            view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+        }
+    }*/
 // Remember the scroll state
     val scrollState = rememberScrollState()
 
-
+    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
+        isKeyboardVisible.value = isVisible
+    })
     val fontInt = getFontListFromAssets().get(selectedFont)
 
-    var backgroundcolor=selectedBackgroundColor
+    var backgroundcolor = selectedBackgroundColor
 
     Box(
         modifier = Modifier
@@ -834,22 +887,27 @@ fun EditorScreen(
     ) {
 
         // Background image
-        if (onImageSelectURL>1) {
+        if (onImageSelectURL > 1) {
             Log.i("DesignActivity", "ImageListAlertDialog $onImageSelectURL")
-            backgroundcolor=Color.Transparent
+            backgroundcolor = Color.Transparent
             Image(
                 painter = painterResource(id = onImageSelectURL),
-            contentDescription = null,
-            contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                contentDescription = null,
+                contentScale = ContentScale.Crop, // Scale the image to fill the Box
 //            contentScale = ContentScale.Crop, // Scale the image to fill the Box
-            modifier = Modifier.fillMaxSize()
-        )
-        }else{
-            backgroundcolor=selectedBackgroundColor
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            backgroundcolor = selectedBackgroundColor
         }
 
 
-        ImageListAlertDialog(shouldShowDialog,onDismiss = { onShowBackImageDialog(false) }, onImageSelectedUrl = {onImageSelectURL=it},imageList)
+        ImageListAlertDialog(
+            shouldShowDialog,
+            onDismiss = { onShowBackImageDialog(false) },
+            onImageSelectedUrl = { onImageSelectURL = it },
+            imageList
+        )
 
         Column(
             modifier = Modifier
@@ -881,56 +939,178 @@ fun EditorScreen(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
-
-                // Display image contents in a LazyVerticalGrid
+                // Display image, audio, and video contents in a LazyVerticalGrid
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    items(contents.filterIsInstance<Content.Image>()) { content ->
-                        Image(
-                            painter = rememberAsyncImagePainter(model = content.uri),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .padding(bottom = 8.dp)
-                        )
+                    items(contents) { content ->
+                        when (content) {
+                            is Content.Image -> {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = content.uri),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
+                            is Content.Audio -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.music_file),
+                                        contentDescription = "Audio",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context,content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+                            is Content.Video -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.video_file),
+                                        contentDescription = "Video",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context,content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+
+                            else -> {}
+                        }
+                    }
+                }
+                //display bar-chart
+                barChartData?.let { data ->
+                    Log.d("Barchartdatwa", "$data ---dataPoints")
+                    BarChart(data.labels, data.dataPoints)
+                }
+                // Style buttons shown above the keyboard
+                if (isKeyboardVisible.value) {
+                    Row(
+                        modifier = Modifier
+                            .background(Color.LightGray)
+                            .padding(8.dp)
+                    ) {
+                        IconButton(onClick = { isBold = !isBold }) {
+                            Icon(painterResource(id = R.drawable.baseline_format_bold_24), contentDescription = "Bold")
+                        }
+                        IconButton(onClick = { isItalic = !isItalic }) {
+                            Icon(painterResource(id = R.drawable.baseline_format_italic_24), contentDescription = "Italic")
+                        }
+                        IconButton(onClick = { isUnderline = !isUnderline }) {
+                            Icon(painterResource(id = R.drawable.baseline_format_underlined_24), contentDescription = "Underline")
+                        }
                     }
                 }
 
-                //display bar-chart
-                barChartData?.let { data ->
-                    Log.d("Barchartdatwa","$data ---dataPoints" )
-                    BarChart(data.labels, data.dataPoints)
-                }
-
-                // Text input field
-                TextField(
-                    value = textInput,
-                    onValueChange = { textInput = it },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .border(0.5.dp, Color.White),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = backgroundcolor, // Change background color to white
-                        cursorColor = Color.Black // Change cursor color to black (optional)
-                    ),
-                    textStyle = TextStyle(
-                        fontSize = fontSize,
-                        fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                        fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
-                        color = selectedColor,
-                        fontFamily = FontFamily(
-                            Font(fontInt!!, FontWeight.Normal)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    TextField(
+                        value = textInput,
+                        onValueChange = { textInput = it },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor,
+                            cursorColor = Color.Black
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = fontSize,
+                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                            color = selectedColor,
+                            fontFamily = FontFamily(
+                                Font(fontInt!!, FontWeight.Normal)
+                            )
                         )
                     )
-                )
+                }
+
             }
+        }
+
+
+    }
+}
+
+@Composable
+fun KeyboardVisibilityDetector(
+    onKeyboardVisibilityChanged: (Boolean) -> Unit
+) {
+    val view = LocalView.current
+    val isKeyboardVisible = remember { mutableStateOf(false) }
+
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val rect = Rect()
+            view.getWindowVisibleDisplayFrame(rect)
+            val screenHeight = view.height
+            val keypadHeight = screenHeight - rect.bottom
+            val isKeyboardNowVisible = keypadHeight > screenHeight * 0.15
+            if (isKeyboardNowVisible != isKeyboardVisible.value) {
+                isKeyboardVisible.value = isKeyboardNowVisible
+                onKeyboardVisibilityChanged(isKeyboardNowVisible)
+            }
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose {
+            view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
         }
     }
 }
 
+fun getFileNameFromUri(context: Context, uri: Uri): String {
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+    cursor?.moveToFirst()
+    val fileName = cursor?.getString(nameIndex ?: 0) ?: ""
+    cursor?.close()
+    return fileName
+}
+@Composable
+fun rememberVideoThumbnail(uri: Uri): Painter {
+    val context = LocalContext.current
+    val bitmap = remember(uri) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, uri)
+            val thumbnail = retriever.getFrameAtTime(0)
+            retriever.release()
+            thumbnail
+        } else {
+            null
+        }
+    }
+    return remember { BitmapPainter(bitmap?.asImageBitmap() ?: ImageBitmap(1, 1)) }
+}
 
 fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
     val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
@@ -946,6 +1126,7 @@ fun BottomMenuColumn(
     onShowBackImageDialog: (Boolean) -> Unit,
     onShowColorPicker: (Boolean) -> Unit,
     imagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
+    filePickerLauncher: ManagedActivityResultLauncher<Array<String>, Uri?>,
     activeHighlightColor: Color = Color.Green,
     activeTextColor: Color = Color.White,
     inactiveTextColor: Color = Color.White,
@@ -1009,9 +1190,9 @@ fun BottomMenuColumn(
     ) {
         Log.i("DesignActivity", "DropdownMenu $selectedItemIndex")
 
-       /* if (selectedItemIndex != 5) {
-            onShowColorPicker(false)
-        }*/
+        /* if (selectedItemIndex != 5) {
+             onShowColorPicker(false)
+         }*/
 
         val fontList = getFontListFromAssets()
         val listFont = ArrayList<BottomMenuContent>()
@@ -1061,12 +1242,14 @@ fun BottomMenuColumn(
                         imagePickerLauncher.launch("image/*")
                     } else if (item.title.equals("Background Image")) {
                         onShowBackImageDialog(true)
-                    }else if(item.title.equals("Background Color")){
+                    } else if (item.title.equals("Background Color")) {
                         onShowColorPicker(true)
                         onColorPickerFor(1)
-                    }else if (item.title.equals("Bar Chart")) {
-                    showDialog = true
-                }
+                    } else if (item.title.equals("Bar Chart")) {
+                        showDialog = true
+                    } else if (item.title.equals("File")) {
+                            filePickerLauncher.launch(arrayOf("audio/*", "video/*"))
+                    }
                 },
                 leadingIcon = {
                     if (selectedItemIndex != 0) {
@@ -1143,7 +1326,8 @@ fun BarChart(labels: List<String>, dataPoints: List<Float>) {
         ) {
             val gap = 2.dp.toPx()
             val totalGapsWidth = gap * (labels.size - 1)
-            val barWidth = (size.width / labels.size) - 5.dp.toPx() // Subtract 5dp from each bar width for gap
+            val barWidth =
+                (size.width / labels.size) - 5.dp.toPx() // Subtract 5dp from each bar width for gap
             val maxValueHeight = size.height
 
             // Draw Y-axis line
@@ -1158,7 +1342,7 @@ fun BarChart(labels: List<String>, dataPoints: List<Float>) {
             drawLine(
                 color = Color.Black,
                 start = Offset(0f, maxValueHeight),
-                end = Offset(size.width, maxValueHeight+ 3),
+                end = Offset(size.width, maxValueHeight + 3),
                 strokeWidth = 2.dp.toPx()
             )
 
@@ -1214,7 +1398,8 @@ fun BarChartInputDialog(onDismiss: () -> Unit, onConfirm: (List<String>, List<Fl
             Button(
                 onClick = {
                     val labelsList = labels.split(",").map { it.trim() }
-                    val dataPointsList = dataPoints.split(",").map { it.trim().toFloatOrNull() ?: 0f }
+                    val dataPointsList =
+                        dataPoints.split(",").map { it.trim().toFloatOrNull() ?: 0f }
                     onConfirm(labelsList, dataPointsList)
                 }
             ) {
@@ -1230,7 +1415,6 @@ fun BarChartInputDialog(onDismiss: () -> Unit, onConfirm: (List<String>, List<Fl
 }
 
 
-
 fun getFontListFromAssets(): HashMap<String, Int> {
     val hashMap = HashMap<String, Int>()
     hashMap.put("Bevan", R.font.bevan)
@@ -1238,10 +1422,10 @@ fun getFontListFromAssets(): HashMap<String, Int> {
     hashMap.put("CaslonAntique", R.font.caslonantique)
     hashMap.put("Poppins", R.font.poppins_black)
     hashMap.put("Sumana", R.font.sumana_bold)
-    hashMap.put("BilloDream",R.font.billodream)
-    hashMap.put("GoldyPersonal",R.font.goldypersonal)
-    hashMap.put("KakeKake",R.font.kakekae)
-    hashMap.put("OrganicPerson",R.font.organicperson)
+    hashMap.put("BilloDream", R.font.billodream)
+    hashMap.put("GoldyPersonal", R.font.goldypersonal)
+    hashMap.put("KakeKake", R.font.kakekae)
+    hashMap.put("OrganicPerson", R.font.organicperson)
 
 
     return hashMap
@@ -1296,7 +1480,7 @@ fun ImageListAlertDialog(
     if (shouldShowDialog) {
         AlertDialog(
             onDismissRequest = { /*shouldShowDialog = false*/ },
-            title = { Text(text = "Choose background")},
+            title = { Text(text = "Choose background") },
             text = {
 
                 // Display image contents in a LazyVerticalGrid
@@ -1322,11 +1506,11 @@ fun ImageListAlertDialog(
                 }
 
 
-
             },
             confirmButton = {
                 Button(
-                    onClick = { onImageSelectedUrl(1)
+                    onClick = {
+                        onImageSelectedUrl(1)
                         onDismiss()
                     }
                 ) {
