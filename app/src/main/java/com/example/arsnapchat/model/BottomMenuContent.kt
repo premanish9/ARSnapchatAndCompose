@@ -1,4 +1,4 @@
-package com.example.arsnapchat
+package com.example.arsnapchat.model
 
 import androidx.annotation.DrawableRes
 // having two parameters title and iconid
