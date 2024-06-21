@@ -876,7 +876,6 @@ fun EditorScreen(
         isKeyboardVisible.value = isVisible
     })
     val fontInt = getFontListFromAssets().get(selectedFont)
-
     var backgroundcolor = selectedBackgroundColor
 
     Box(
@@ -1016,15 +1015,17 @@ fun EditorScreen(
                     Row(
                         modifier = Modifier
                             .background(Color.LightGray)
-                            .padding(8.dp)
                     ) {
-                        IconButton(onClick = { isBold = !isBold }) {
+                        IconButton(onClick = { isBold = !isBold },
+                            modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)) {
                             Icon(painterResource(id = R.drawable.baseline_format_bold_24), contentDescription = "Bold")
                         }
-                        IconButton(onClick = { isItalic = !isItalic }) {
+                        IconButton(onClick = { isItalic = !isItalic },
+                            modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)) {
                             Icon(painterResource(id = R.drawable.baseline_format_italic_24), contentDescription = "Italic")
                         }
-                        IconButton(onClick = { isUnderline = !isUnderline }) {
+                        IconButton(onClick = { isUnderline = !isUnderline},
+                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)) {
                             Icon(painterResource(id = R.drawable.baseline_format_underlined_24), contentDescription = "Underline")
                         }
                     }
