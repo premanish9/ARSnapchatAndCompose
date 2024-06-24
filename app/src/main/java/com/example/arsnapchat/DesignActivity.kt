@@ -3,12 +3,12 @@ package com.example.arsnapchat
 
 import android.app.Activity
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
-import android.media.MediaMetadataRetriever
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
@@ -49,13 +49,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -74,7 +67,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,12 +77,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -106,6 +95,7 @@ import androidx.compose.ui.text.style.TextDecoration
 
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
@@ -113,13 +103,19 @@ import coil.compose.rememberAsyncImagePainter
 import coil.compose.rememberImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
+import com.example.arsnapchat.model.ChartData
 import com.example.arsnapchat.model.Course
+import com.example.arsnapchat.model.EditorContent
+import com.example.arsnapchat.model.ImageContent
+import com.example.arsnapchat.model.TextContent
 import com.example.arsnapchat.ui.theme.ARSnapchatTheme
 import com.github.skydoves.colorpicker.compose.AlphaSlider
 import com.github.skydoves.colorpicker.compose.AlphaTile
 import com.github.skydoves.colorpicker.compose.BrightnessSlider
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
+import com.google.gson.Gson
+import java.io.File
 import kotlin.math.abs
 
 
@@ -613,17 +609,47 @@ fun NotepadDesign(name: String, modifier: Modifier = Modifier) {
     }
 }
 
+fun findFirstTextIndex(contents: List<Content>): Int? {
+    return contents.indexOfFirst { it is Content.Text }.takeIf { it != -1 }
+}
+
+
+fun replaceTextAtIndex(contents: List<Content>, index: Int?, newText: String): List<Content> {
+    /*val mutableList = contents.toMutableList()
+    mutableList[index!!] = Content.Text(newText)
+    val updatedList: List<Content> = mutableList.toList()
+    println(updatedList)*/
+    return contents.mapIndexed { i, content ->
+        if (i == index && content is Content.Text) {
+            content.copy(text = newText)
+        } else {
+            content
+        }
+    }
+
+}
+
 @Composable
 fun ToolbarSection() {
 
     var selectedColor by remember { mutableStateOf(Color.Black) }
     var selectedBackgroundColor by remember { mutableStateOf(Color.White) }
+    var selectedFontSize by remember { mutableStateOf(10.sp) }
+    var isBold by remember { mutableStateOf(false) }
+    var isItalic by remember { mutableStateOf(false) }
+
     var selectedColorPickerfor by remember {
         mutableStateOf(3)
     }
     var selectedFont by remember { mutableStateOf("Cantataone") }
     var showColorPicker by remember { mutableStateOf(false) } // State to toggle between views
+    var isbgImagePicker by remember { mutableStateOf(false) }
+    var setBgImage by remember { mutableStateOf(false) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedBgUri by remember { mutableStateOf<Uri?>(null) }
+    var onImageSelectURL by remember {
+        mutableStateOf(0)
+    }
     var contents by remember { mutableStateOf(listOf<Content>()) }
     var barChartData by remember { mutableStateOf<BarChartData?>(null) }
 
@@ -631,16 +657,25 @@ fun ToolbarSection() {
     var shouldShowDialog by remember { mutableStateOf(false) }
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
             if (uri != null) {
                 selectedImageUri = uri
-                contents = contents + Content.Image(uri)
+                if (!isbgImagePicker) {
+                    contents = contents + Content.Image(uri)
+                    // setBgImage=false
+                } else {
+                    selectedBgUri = uri
+                    setBgImage = true
+                    isbgImagePicker = false
+                }
             }
             Log.i("DesignActivity", "selectedImageUri $selectedImageUri $uri")
         }
     )
+
     val context = LocalContext.current
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -648,8 +683,11 @@ fun ToolbarSection() {
             uri?.let {
                 val mimeType = context.contentResolver.getType(it)
                 when {
-                    mimeType?.startsWith("audio/") == true -> contents = contents + Content.Audio(it)
-                    mimeType?.startsWith("video/") == true -> contents = contents + Content.Video(it)
+                    mimeType?.startsWith("audio/") == true -> contents =
+                        contents + Content.Audio(it)
+
+                    mimeType?.startsWith("video/") == true -> contents =
+                        contents + Content.Video(it)
                 }
             }
         }
@@ -695,7 +733,33 @@ fun ToolbarSection() {
                 imagePickerLauncher = imagePickerLauncher,
                 filePickerLauncher = filePickerLauncher,
                 barChartData = barChartData,
-                onBarChartDataChange = { barChartData = it }
+                contents = contents,
+                selectedFontcolor = selectedColor,
+                selectedFontFamily = selectedFont,
+                selectedFontSize = selectedFontSize.value,
+                isBold = isBold,
+                isItalic = isItalic,
+
+                onBarChartDataChange = { barChartData = it },
+                onTextChange = {
+                    val index = findFirstTextIndex(contents)
+                    // contents=contents+Content.Text(it)
+                    if (index == null) {
+                        contents = contents + Content.Text(it)
+                    } else {
+                        contents = replaceTextAtIndex(contents, index, it)
+                    }
+                },
+                onFontColorChange = { selectedColor = it },
+                onFontSizeChange = { selectedFontSize = it.sp },
+                onBoldChange = { isBold = it },
+                onItalicChange = { isItalic = it },
+                onImageSelectURL = { onImageSelectURL = it },
+                selectedImageURL = onImageSelectURL,
+                selectedImageURI = selectedBgUri,
+                onImageSelectedURI = { selectedBgUri = it },
+                onSetBgImage = { setBgImage = it }
+
             )
 
         }
@@ -716,13 +780,36 @@ fun ToolbarSection() {
             EditorScreen(
                 selectedColor,
                 selectedFont,
+                selectedFontSize,
+                isBold,
+                isItalic,
                 selectedBackgroundColor,
                 contents,
-                onTextChange = { contents = it },
+                onFontSizeChange = { selectedFontSize = it.sp },
+                onBoldChange = { isBold = it },
+                onItalicChange = { isItalic = it },
+                onTextChange = {
+                    val index = findFirstTextIndex(contents)
+                    // contents=contents+Content.Text(it)
+                    if (index == null) {
+                        contents = contents + Content.Text(it)
+                    } else {
+                        contents = replaceTextAtIndex(contents, index, it)
+                    }
+                },
+                onImageSelectURL = { onImageSelectURL = it },
+                selectedImageURL = onImageSelectURL,
                 shouldShowDialog,
                 onShowBackImageDialog = { shouldShowDialog = it },
+                openImagePicker = {
+                    isbgImagePicker = true
+                    imagePickerLauncher.launch("image/*")
+                },
                 imageList,
-                barChartData = barChartData
+                barChartData = barChartData,
+                selectedBgUri,
+                setBgImage,
+                onSetBgImage = { setBgImage = it }
             )
         }
 
@@ -831,54 +918,74 @@ sealed class Content {
 }
 
 
+fun saveToSharedPreferences(context: Context, key: String, content: String) {
+    val sharedPreferences: SharedPreferences =
+        context.getSharedPreferences("EditorPrefs", Context.MODE_PRIVATE)
+    val editor = sharedPreferences.edit()
+    editor.putString(key, content)
+    editor.apply()
+}
+
+
+fun loadFromSharedPreferences(context: Context, key: String): String? {
+    val sharedPreferences: SharedPreferences =
+        context.getSharedPreferences("EditorPrefs", Context.MODE_PRIVATE)
+    return sharedPreferences.getString(key, null)
+}
+
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
     selectedColor: Color,
     selectedFont: String,
+    selectedFontSize: TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
     selectedBackgroundColor: Color,
     contents: List<Content>,
-    onTextChange: (List<Content>) -> Unit,
+    onFontSizeChange: (Float) -> Unit,
+    onBoldChange: (Boolean) -> Unit,
+    onItalicChange: (Boolean) -> Unit,
+    onTextChange: (String) -> Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
     shouldShowDialog: Boolean,
     onShowBackImageDialog: (Boolean) -> Unit,
+    openImagePicker: (Boolean) -> Unit,
     imageList: List<Int>,
-    barChartData: BarChartData? = null
+    barChartData: BarChartData? = null,
+    selectedImageUri: Uri?,
+    setBgImage: Boolean,
+    onSetBgImage: (Boolean) -> Unit
 ) {
     var textInput by remember { mutableStateOf("Type here...") }
     var fontSize by remember { mutableStateOf(10.sp) }
-    var isBold by remember { mutableStateOf(false) }
-    var isItalic by remember { mutableStateOf(false) }
+    var isBold1 by remember { mutableStateOf(false) }
+    var isItalic1 by remember { mutableStateOf(false) }
     var isUnderline by remember { mutableStateOf(false) }
 
-    var onImageSelectURL by remember {
-        mutableStateOf(0)
-    }
+    /* var fontSize by remember { mutableStateOf(10.sp) }
+     var isBold by remember { mutableStateOf(false) }
+     var isItalic by remember { mutableStateOf(false) }*/
+
+    /* var onImageSelectURL by remember {
+         mutableStateOf(0)
+     }*/
+
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU",isKeyboardVisible.toString())
-    // Observe keyboard visibility
-    /* val context = LocalContext.current
-     val view = LocalView.current
-     DisposableEffect(view) {
-         val listener = ViewTreeObserver.OnGlobalLayoutListener {
-             val rect = Rect()
-             view.getWindowVisibleDisplayFrame(rect)
-             val screenHeight = view.height
-             val keypadHeight = screenHeight - rect.bottom
-             isKeyboardVisible.value = keypadHeight > screenHeight * 0.15
-         }
-         view.viewTreeObserver.addOnGlobalLayoutListener(listener)
-         onDispose {
-             view.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-         }
-     }*/
-// Remember the scroll state
-    val scrollState = rememberScrollState()
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
 
     KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
         isKeyboardVisible.value = isVisible
     })
+// Remember the scroll state
+    val scrollState = rememberScrollState()
+
+
     val fontInt = getFontListFromAssets().get(selectedFont)
+
     var backgroundcolor = selectedBackgroundColor
 
     Box(
@@ -888,12 +995,34 @@ fun EditorScreen(
         // Ensure the entire Box is scrollable
     ) {
 
+
         // Background image
-        if (onImageSelectURL > 1) {
-            Log.i("DesignActivity", "ImageListAlertDialog $onImageSelectURL")
+        if (selectedImageURL == 2) {
+
+
+            openImagePicker(true)
+            onImageSelectURL(3)
+
+
+        } else if (selectedImageURL == 3) {
+            // onSetBgImage(true)
+
+            if (setBgImage) {
+                backgroundcolor = Color.Transparent
+                Image(
+                    painter = rememberAsyncImagePainter(selectedImageUri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                    modifier = Modifier.fillMaxSize()
+                )
+                //  onImageSelectURL=0
+            }
+
+        } else if (selectedImageURL > 1) {
+            Log.i("DesignActivity", "ImageListAlertDialog $selectedImageURL")
             backgroundcolor = Color.Transparent
             Image(
-                painter = painterResource(id = onImageSelectURL),
+                painter = painterResource(id = selectedImageURL),
                 contentDescription = null,
                 contentScale = ContentScale.Crop, // Scale the image to fill the Box
 //            contentScale = ContentScale.Crop, // Scale the image to fill the Box
@@ -907,7 +1036,8 @@ fun EditorScreen(
         ImageListAlertDialog(
             shouldShowDialog,
             onDismiss = { onShowBackImageDialog(false) },
-            onImageSelectedUrl = { onImageSelectURL = it },
+            onImageSelectedUrl = { onImageSelectURL(it) },
+            pickfromGallery = { onSetBgImage(it) },
             imageList
         )
 
@@ -918,29 +1048,34 @@ fun EditorScreen(
             //verticalScroll(scrollState)
         ) {
 
+            var isdata = false
+
             Slider(
-                value = fontSize.value,
-                onValueChange = { fontSize = it.sp },
+                value = selectedFontSize.value,
+                onValueChange = { onFontSizeChange(it) },
                 valueRange = 10f..30f,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Column(modifier = Modifier.fillMaxSize()) {
                 // Display text contents in a Column
-                contents.filterIsInstance<Content.Text>().forEach { content ->
-                    Text(
-                        text = content.text,
-                        style = TextStyle(
-                            color = selectedColor,
-                            fontSize = fontSize,
-                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Thin)
-                            )
-                        ),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                }
+
+
+                // Display image contents in a LazyVerticalGrid
+                /* LazyVerticalGrid(
+                     columns = GridCells.Adaptive(minSize = 100.dp),
+                     modifier = Modifier.fillMaxWidth()
+                 ) {
+                     items(contents.filterIsInstance<Content.Image>()) { content ->
+                         Image(
+                             painter = rememberAsyncImagePainter(model = content.uri),
+                             contentDescription = null,
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .height(200.dp)
+                                 .padding(bottom = 8.dp)
+                         )
+                     }
+                 }*/
                 // Display image, audio, and video contents in a LazyVerticalGrid
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
@@ -958,6 +1093,7 @@ fun EditorScreen(
                                         .padding(bottom = 8.dp)
                                 )
                             }
+
                             is Content.Audio -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -974,12 +1110,13 @@ fun EditorScreen(
                                     )
                                     val context = LocalContext.current
                                     Text(
-                                        text = getFileNameFromUri(context,content.uri),
+                                        text = getFileNameFromUri(context, content.uri),
                                         textAlign = TextAlign.Center,
                                         style = TextStyle(fontSize = 14.sp)
                                     )
                                 }
                             }
+
                             is Content.Video -> {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -997,7 +1134,7 @@ fun EditorScreen(
                                     )
                                     val context = LocalContext.current
                                     Text(
-                                        text = getFileNameFromUri(context,content.uri),
+                                        text = getFileNameFromUri(context, content.uri),
                                         textAlign = TextAlign.Center,
                                         style = TextStyle(fontSize = 14.sp)
                                     )
@@ -1008,37 +1145,54 @@ fun EditorScreen(
                         }
                     }
                 }
+
                 //display bar-chart
                 barChartData?.let { data ->
                     Log.d("Barchartdatwa", "$data ---dataPoints")
                     BarChart(data.labels, data.dataPoints)
                 }
-                // Style buttons shown above the keyboard
                 if (isKeyboardVisible.value) {
                     Row(
                         modifier = Modifier
                             .background(Color.LightGray)
-                            .padding(8.dp)
                     ) {
-                        IconButton(onClick = { isBold = !isBold },
-                            modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_bold_24), contentDescription = "Bold")
+                        IconButton(
+                            onClick = { isBold1 = !isBold1 },
+                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_bold_24),
+                                contentDescription = "Bold"
+                            )
                         }
-                        IconButton(onClick = { isItalic = !isItalic },
-                            modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_italic_24), contentDescription = "Italic")
+                        IconButton(
+                            onClick = { isItalic1 = !isItalic1 },
+                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_italic_24),
+                                contentDescription = "Italic"
+                            )
                         }
-                        IconButton(onClick = { isUnderline = !isUnderline},
-                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)) {
-                            Icon(painterResource(id = R.drawable.baseline_format_underlined_24), contentDescription = "Underline")
+                        IconButton(
+                            onClick = { isUnderline = !isUnderline },
+                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_underlined_24),
+                                contentDescription = "Underline"
+                            )
                         }
                     }
                 }
 
-                Column(modifier = Modifier.fillMaxSize()) {
+               /* Column(modifier = Modifier.fillMaxSize()) {
                     TextField(
                         value = textInput,
-                        onValueChange = { textInput = it },
+                        onValueChange = {
+                            textInput = it,
+                            onTextChange(it)
+                        },
                         modifier = Modifier
                             .fillMaxSize()
                             .border(0.5.dp, Color.White),
@@ -1048,8 +1202,65 @@ fun EditorScreen(
                         ),
                         textStyle = TextStyle(
                             fontSize = fontSize,
-                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                            color = selectedColor,
+                            fontFamily = FontFamily(
+                                Font(fontInt!!, FontWeight.Normal)
+                            )
+                        )
+                    )
+                }*/
+
+                contents.filterIsInstance<Content.Text>().forEach { content ->
+                    isdata = true
+                    // textInput=content.text
+                    TextField(
+                        value = content.text,
+                        onValueChange = {
+                            textInput = it
+                            onTextChange(it)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor, // Change background color to white
+                            cursorColor = Color.Black // Change cursor color to black (optional)
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = selectedFontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            color = selectedColor,
+                            fontFamily = FontFamily(
+                                Font(fontInt!!, FontWeight.Normal)
+                            )
+                        )
+                    )
+
+                }
+                // Text input field
+                if (!isdata) {
+                    TextField(
+                        value = textInput,
+                        onValueChange = {
+                            textInput = it
+                            onTextChange(it)
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor, // Change background color to white
+                            cursorColor = Color.Black // Change cursor color to black (optional)
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = fontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
                             textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
                             color = selectedColor,
                             fontFamily = FontFamily(
@@ -1058,11 +1269,8 @@ fun EditorScreen(
                         )
                     )
                 }
-
             }
         }
-
-
     }
 }
 
@@ -1100,26 +1308,16 @@ fun getFileNameFromUri(context: Context, uri: Uri): String {
     cursor?.close()
     return fileName
 }
-@Composable
-fun rememberVideoThumbnail(uri: Uri): Painter {
-    val context = LocalContext.current
-    val bitmap = remember(uri) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(context, uri)
-            val thumbnail = retriever.getFrameAtTime(0)
-            retriever.release()
-            thumbnail
-        } else {
-            null
-        }
-    }
-    return remember { BitmapPainter(bitmap?.asImageBitmap() ?: ImageBitmap(1, 1)) }
-}
 
 fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
     val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
     return FontFamily(typeface)
+}
+
+@Composable
+fun LoadImageFromStorage(filePath: String): Painter {
+    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
+    return imagePainter
 }
 
 @Composable
@@ -1137,12 +1335,29 @@ fun BottomMenuColumn(
     inactiveTextColor: Color = Color.White,
     initialSelectedItemIndex: Int = 0,
     barChartData: BarChartData? = null,
-    onBarChartDataChange: (BarChartData) -> Unit
+    contents: List<Content>,
+    selectedFontcolor: Color,
+    selectedFontFamily: String,
+    selectedFontSize: Float,
+    isBold: Boolean,
+    isItalic: Boolean,
+    onBarChartDataChange: (BarChartData) -> Unit,
+    onTextChange: (String) -> Unit,
+    onFontColorChange: (Color) -> Unit,
+    onFontSizeChange: (Float) -> Unit,
+    onBoldChange: (Boolean) -> Unit,
+    onItalicChange: (Boolean) -> Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
+    selectedImageURI: Uri?,
+    onImageSelectedURI: (Uri?) -> Unit,
+    onSetBgImage: (Boolean) -> Unit
+
 ) {
     var selectedItemIndex by remember {
         mutableStateOf(initialSelectedItemIndex)
     }
-
+    val context = LocalContext.current
     var expanded by remember {
         mutableStateOf(false)
     }
@@ -1165,7 +1380,7 @@ fun BottomMenuColumn(
             ) {
                 selectedItemIndex = index
                 expanded =
-                    selectedItemIndex == 0 || selectedItemIndex == 1 || selectedItemIndex == 5
+                    selectedItemIndex == 0 || selectedItemIndex == 1 || selectedItemIndex == 5 || selectedItemIndex == 3
 
                 if (selectedItemIndex == 2)
                     onShowColorPicker(false)
@@ -1221,6 +1436,10 @@ fun BottomMenuColumn(
                 BottomMenuContent("Bar Chart", R.drawable.baseline_bar_chart_24)
             )
 
+            3 -> listOf(
+                BottomMenuContent("Save", R.drawable.baseline_save_24),
+                BottomMenuContent("Open", R.drawable.baseline_link_24),
+            )
 
             5 -> listOf(BottomMenuContent("Color Picker", R.drawable.baseline_format_color_text_24))
 
@@ -1247,13 +1466,69 @@ fun BottomMenuColumn(
                         imagePickerLauncher.launch("image/*")
                     } else if (item.title.equals("Background Image")) {
                         onShowBackImageDialog(true)
+                    } else if (item.title.equals("File")) {
+                        filePickerLauncher.launch(arrayOf("audio/*", "video/*"))
+                    } else if (item.title.equals("Save")) {
+                        Log.i("DesignActivity", "save $selectedImageURI")
+                        val editorContent = EditorContent(
+                            texts = contents.filterIsInstance<Content.Text>().map {
+                                TextContent(
+                                    text = it.text,
+                                    color = selectedFontcolor,
+                                    fontSize = selectedFontSize,
+                                    isBold = isBold,
+                                    isItalic = isItalic,
+                                    fontFamily = selectedFontFamily,
+                                    selectedImageURL = selectedImageURL,
+                                    selectedImageURI = selectedImageURI.toString()
+                                )
+                            },
+                            images = contents.filterIsInstance<Content.Image>().map {
+                                ImageContent(uri = it.uri.toString())
+                            },
+                            chartData = barChartData?.let {
+                                ChartData(it.labels, it.dataPoints)
+                            }
+                        )
+
+                        val serializedData = serializeEditorContent(editorContent)
+
+                        saveToSharedPreferences(context = context, "editorContent", serializedData)
+
+                    } else if (item.title.equals("Open")) {
+                        val jsonData = loadFromSharedPreferences(context, "editorContent")
+                        jsonData?.let {
+                            val editorContent = deserializeEditorContent(it)
+
+                            editorContent?.let {
+
+                                onTextChange(
+                                    it.texts.get(0).text
+                                )
+                                //  imagePickerLauncher.launch("image/*")
+                                onFontSizeChange(it.texts.get(0).fontSize)
+                                onFontChange(it.texts.get(0).fontFamily)
+                                onFontColorChange(it.texts.get(0).color)
+                                onImageSelectURL(it.texts.get(0).selectedImageURL)
+                                onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
+                                if (it.texts.get(0).selectedImageURI != null) {
+                                    onSetBgImage(true)
+                                }
+
+
+                                Log.i(
+                                    "DesignActivity",
+                                    "editorContent $editorContent ${contents.size}"
+                                )
+
+                                // Set other properties like barChartData, etc.
+                            }
+                        }
                     } else if (item.title.equals("Background Color")) {
                         onShowColorPicker(true)
                         onColorPickerFor(1)
                     } else if (item.title.equals("Bar Chart")) {
                         showDialog = true
-                    } else if (item.title.equals("File")) {
-                        filePickerLauncher.launch(arrayOf("audio/*", "video/*"))
                     }
                 },
                 leadingIcon = {
@@ -1302,6 +1577,17 @@ fun BottomMenuColumn(
         )
     }
 
+}
+
+
+val gson = Gson()
+
+fun serializeEditorContent(editorContent: EditorContent): String {
+    return gson.toJson(editorContent)
+}
+
+fun deserializeEditorContent(json: String): EditorContent? {
+    return gson.fromJson(json, EditorContent::class.java)
 }
 
 @Composable
@@ -1479,6 +1765,7 @@ fun ImageListAlertDialog(
     shouldShowDialog: Boolean,
     onDismiss: () -> Unit,
     onImageSelectedUrl: (Int) -> Unit,
+    pickfromGallery: (Boolean) -> Unit,
     imageList: List<Int>
 ) {
 
@@ -1503,6 +1790,7 @@ fun ImageListAlertDialog(
                                 .height(200.dp)
                                 .clickable {
                                     onImageSelectedUrl(content)
+                                    //  pickfromGallery(false)
                                     onDismiss()
                                 }
                                 .padding(bottom = 8.dp)
@@ -1515,7 +1803,19 @@ fun ImageListAlertDialog(
             confirmButton = {
                 Button(
                     onClick = {
+                        onImageSelectedUrl(2)
+                        pickfromGallery(false)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Pick From Gallery")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
                         onImageSelectedUrl(1)
+                        //  pickfromGallery(false)
                         onDismiss()
                     }
                 ) {
