@@ -2,8 +2,11 @@ package com.example.arsnapchat
 
 
 import android.app.Activity
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -15,8 +18,11 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.util.Log
+import android.view.View
 import android.view.ViewTreeObserver
+import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -122,19 +128,35 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import android.util.Base64
 import kotlin.math.abs
 
 
 class DesignActivity : ComponentActivity() {
     var intitalfont: String = ""
     var mcontext: Context? = null
-
+    /*val RESULT_ENABLE: Int = 1
+    var devicePolicyManager: DevicePolicyManager? = null
+    var compName: ComponentName? = null*/
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         mcontext = this
+
+        /*devicePolicyManager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        compName = ComponentName(this, MyAdminReceiver::class.java)
+
+
+        if(intitalfont.isEmpty()) {
+            intitalfont="hello"
+            val intent: Intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
+            intent.putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Your explanation message here"
+            )
+            startActivityForResult(intent, RESULT_ENABLE)
+        }*/
 
         setContent {
             ARSnapchatTheme {
@@ -147,6 +169,13 @@ class DesignActivity : ComponentActivity() {
             }
         }
     }
+
+   /* override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == RESULT_ENABLE && resultCode == RESULT_OK) {
+            // Device Admin enabled
+        }
+    }*/
 }
 
 
@@ -684,14 +713,17 @@ fun ToolbarSection() {
         mutableStateOf(0)
     }
     var contents by remember { mutableStateOf(listOf<Content>()) }
-    contents = contents + Content.Text("Type here !!")
+    val indexii = findFirstTextIndex(contents)
+    if(indexii==null) {
+        contents = contents + Content.Text("Type here !!")
+    }
     var barChartData by remember { mutableStateOf<BarChartData?>(null) }
 
 
     var shouldShowDialog by remember { mutableStateOf(false) }
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
-
+    Log.i("DesignActivity", "ToolbarSection initialised")
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
@@ -786,6 +818,8 @@ fun ToolbarSection() {
                     }
                 },
                 onImageChange={contents = contents + Content.Image(it)},
+                onVideoChange ={contents = contents + Content.Video(it)},
+                onAudioChange={contents = contents + Content.Audio(it)},
                 onFontColorChange = { selectedColor = it },
                 onFontSizeChange = { selectedFontSize = it.sp },
                 onBoldChange = { isBold = it },
@@ -1000,15 +1034,7 @@ fun EditorScreen(
     setBgImage: Boolean,
     onSetBgImage: (Boolean) -> Unit
 ) {
-    var textInput by remember { mutableStateOf("Type here...") }
 
-    /* var fontSize by remember { mutableStateOf(10.sp) }
-     var isBold by remember { mutableStateOf(false) }
-     var isItalic by remember { mutableStateOf(false) }*/
-
-    /* var onImageSelectURL by remember {
-         mutableStateOf(0)
-     }*/
 
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
@@ -1017,8 +1043,6 @@ fun EditorScreen(
     KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
         isKeyboardVisible.value = isVisible
     })
-// Remember the scroll state
-    val scrollState = rememberScrollState()
 
 
 
@@ -1117,23 +1141,100 @@ fun EditorScreen(
 
 
                 // Display image contents in a LazyVerticalGrid
-                /* LazyVerticalGrid(
+                 LazyVerticalGrid(
                      columns = GridCells.Adaptive(minSize = 100.dp),
                      modifier = Modifier.fillMaxWidth()
                  ) {
                      items(contents.filterIsInstance<Content.Image>()) { content ->
-                         Image(
-                             painter = rememberAsyncImagePainter(model = content.uri),
-                             contentDescription = null,
+                          val context = LocalContext.current
+                         // val bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
+                         var bitmap= base64ToBitmap(content.uri.toString())
+                        // Log.i("DesignActivity", "setlistImage $bitmap")
+                         if (bitmap != null) {
+                             Image(
+                                 bitmap = bitmap!!.asImageBitmap(),
+                                 contentDescription = null,
+                                 contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .height(200.dp)
+                                     .padding(2.dp)
+                             )
+                         }else{
+                             bitmap= content.uri?.let { loadBitmapFromUri(context =context , it) }
+                            // Log.i("DesignActivity", "setBgImage after null $bitmap")
+                             if (bitmap != null) {
+                                 Image(
+                                     bitmap = bitmap!!.asImageBitmap(),
+                                     contentDescription = null,
+                                     contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                                     modifier = Modifier
+                                         .fillMaxWidth()
+                                         .height(200.dp)
+                                         .padding(2.dp)
+                                 )
+                             }
+                         }
+
+                     }
+
+
+                     items(contents.filterIsInstance<Content.Audio>()) { content ->
+                         Column(
+                             horizontalAlignment = Alignment.CenterHorizontally,
                              modifier = Modifier
                                  .fillMaxWidth()
-                                 .height(200.dp)
                                  .padding(bottom = 8.dp)
-                         )
+                         ) {
+                             Image(
+                                 painter = painterResource(id = R.drawable.music_file),
+                                 contentDescription = "Audio",
+                                 modifier = Modifier
+                                     .size(100.dp)
+                                     .padding(bottom = 4.dp)
+                             )
+                             val context = LocalContext.current
+                             Text(
+                                 text = getFileNameFromUri(context, content.uri),
+                                 textAlign = TextAlign.Center,
+                                 style = TextStyle(fontSize = 14.sp)
+                             )
+                         }
                      }
-                 }*/
+
+
+                     items(contents.filterIsInstance<Content.Video>()) { content ->
+                         Column(
+                             horizontalAlignment = Alignment.CenterHorizontally,
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .padding(bottom = 8.dp)
+                         ) {
+                             Image(
+                                 painter = painterResource(id = R.drawable.video_file),
+                                 contentDescription = "Video",
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .height(100.dp)
+                                     .padding(bottom = 4.dp)
+                             )
+                             val context = LocalContext.current
+
+                                 Text(
+                                     text = getFileNameFromUri(context, content.uri),
+                                     textAlign = TextAlign.Center,
+                                     style = TextStyle(fontSize = 14.sp)
+                                 )
+
+                         }
+                     }
+
+
+
+
+                 }
                 // Display image, audio, and video contents in a LazyVerticalGrid
-                LazyVerticalGrid(
+                /*LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1201,7 +1302,7 @@ fun EditorScreen(
                             else -> {}
                         }
                     }
-                }
+                }*/
 
                 //display bar-chart
                 barChartData?.let { data ->
@@ -1243,32 +1344,7 @@ fun EditorScreen(
                     }
                 }
 
-               /* Column(modifier = Modifier.fillMaxSize()) {
-                    TextField(
-                        value = textInput,
-                        onValueChange = {
-                            textInput = it,
-                            onTextChange(it)
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor,
-                            cursorColor = Color.Black
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Normal)
-                            )
-                        )
-                    )
-                }*/
+
 
                 contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
@@ -1300,34 +1376,7 @@ fun EditorScreen(
                     )
 
                 }
-                // Text input field
-                /*if (!isdata) {
-                    TextField(
-                        value = textInput,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor, // Change background color to white
-                            cursorColor = Color.Black // Change cursor color to black (optional)
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = selectedFontSize,
-                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Normal)
-                            )
-                        )
-                    )
-                }*/
+
             }
         }
     }
@@ -1394,12 +1443,28 @@ fun KeyboardVisibilityDetector(
 }
 
 fun getFileNameFromUri(context: Context, uri: Uri): String {
-    val cursor = context.contentResolver.query(uri, null, null, null, null)
-    val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-    cursor?.moveToFirst()
-    val fileName = cursor?.getString(nameIndex ?: 0) ?: ""
-    cursor?.close()
+    var fileName=uri.toString()
+    try{
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        cursor?.moveToFirst()
+         fileName = cursor?.getString(nameIndex ?: 0) ?: ""
+        cursor?.close()
+    }catch (e:Exception){
+        e.printStackTrace()
+        if (fileName.contains("video")) {
+            fileName = extractTextAfterVideo(fileName, "/video")
+        }else {
+            fileName = extractTextAfterVideo(fileName, "/audio")
+        }
+    }
+
     return fileName
+}
+
+
+fun extractTextAfterVideo(uri: String,from:String): String {
+    return uri.substringAfter(from)
 }
 
 
@@ -1449,6 +1514,8 @@ fun BottomMenuColumn(
     onBarChartDataChange: (BarChartData) -> Unit,
     onTextChange: (String) -> Unit,
     onImageChange:(Uri)->Unit,
+    onVideoChange:(Uri)->Unit,
+    onAudioChange:(Uri)->Unit,
     onFontColorChange: (Color) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onBoldChange: (Boolean) -> Unit,
@@ -1603,6 +1670,12 @@ fun BottomMenuColumn(
                                 val uri= sampleBitmap?.let { bitmapToBase64(it) }
                                 ImageContent(uri = uri.toString())
                             },
+                            audios = contents.filterIsInstance<Content.Audio>().map {
+                                ImageContent(uri = it.uri.toString())
+                            },
+                            videos = contents.filterIsInstance<Content.Video>().map {
+                                ImageContent(uri = it.uri.toString())
+                            },
                             chartData = barChartData?.let {
                                 ChartData(it.labels, it.dataPoints)
                             }
@@ -1625,9 +1698,16 @@ fun BottomMenuColumn(
                             val editorContent = deserializeEditorContent(it)
 
                             editorContent?.let {
-                                it.images.filterIsInstance<Content.Image>().map {
-                                    onImageChange(it.uri)
+                                for(item in it.images){
+                                    onImageChange(Uri.parse(item.uri))
                                 }
+
+                                for (item in it.videos){
+                                    onVideoChange(Uri.parse(item.uri))
+                                }
+
+
+
 
                                 onTextChange(
                                     it.texts.get(0).text
