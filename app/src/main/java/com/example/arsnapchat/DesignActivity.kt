@@ -109,6 +109,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
+import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
@@ -732,6 +733,7 @@ fun ToolbarSection() {
                 if (!isbgImagePicker) {
                     contents = contents + Content.Image(uri)
                     // setBgImage=false
+                    Log.i("DesignActivity", "ToolbarSection initialised")
                 } else {
                     selectedBgUri = uri
                     setBgImage = true
@@ -1074,7 +1076,8 @@ fun EditorScreen(
                 backgroundcolor = Color.Transparent
                 val context = LocalContext.current
                // val bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
-                var bitmap= base64ToBitmap(selectedImageUri.toString())
+
+                var bitmap= base64ToBitmap(selectedImageUri.toString(),context)
                 Log.i("DesignActivity", "setBgImage $bitmap")
                 if (bitmap != null) {
                     Image(
@@ -1148,7 +1151,7 @@ fun EditorScreen(
                      items(contents.filterIsInstance<Content.Image>()) { content ->
                           val context = LocalContext.current
                          // val bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
-                         var bitmap= base64ToBitmap(content.uri.toString())
+                         var bitmap= base64ToBitmap(content.uri.toString(),context)
                         // Log.i("DesignActivity", "setlistImage $bitmap")
                          if (bitmap != null) {
                              Image(
@@ -1219,7 +1222,6 @@ fun EditorScreen(
                                      .padding(bottom = 4.dp)
                              )
                              val context = LocalContext.current
-
                                  Text(
                                      text = getFileNameFromUri(context, content.uri),
                                      textAlign = TextAlign.Center,
@@ -1411,9 +1413,20 @@ fun bitmapToBase64(bitmap: Bitmap): String {
 }
 
 
-fun base64ToBitmap(base64String: String): Bitmap? {
-    val byteArray = Base64.decode(base64String, Base64.DEFAULT)
-    return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
+    try {
+        val byteArray = Base64.decode(base64String, Base64.DEFAULT)
+        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return try {
+            val inputStream = context.contentResolver.openInputStream(base64String.toUri())
+            BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 }
 
 @Composable
