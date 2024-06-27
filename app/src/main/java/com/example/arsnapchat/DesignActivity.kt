@@ -1677,7 +1677,7 @@ fun BottomMenuColumn(
                                 ImageContent(uri = it.uri.toString())
                             },
                             chartData = barChartData?.let {
-                                ChartData(it.labels, it.dataPoints)
+                                BarChartData(it.labels, it.dataPoints)
                             }
                         )
 
@@ -1688,7 +1688,7 @@ fun BottomMenuColumn(
 
                         val serializedData = serializeEditorContent(editorContent)
 
-                       // Log.i("DesignActivity", "save $serializedData")
+                        Log.i("DesignActivity", "save $serializedData")
 
                         saveToSharedPreferences(context = context, "editorContent", serializedData)
 
@@ -1698,12 +1698,17 @@ fun BottomMenuColumn(
                             val editorContent = deserializeEditorContent(it)
 
                             editorContent?.let {
-                                for(item in it.images){
-                                    onImageChange(Uri.parse(item.uri))
+                                for(imageitem in it.images){
+                                    onImageChange(Uri.parse(imageitem.uri))
                                 }
 
-                                for (item in it.videos){
-                                    onVideoChange(Uri.parse(item.uri))
+                                for (videoitem in it.videos){
+                                    onVideoChange(Uri.parse(videoitem.uri))
+                                }
+
+
+                                for (audioitem in it.audios){
+                                    onAudioChange(Uri.parse(audioitem.uri))
                                 }
 
 
@@ -1726,6 +1731,9 @@ fun BottomMenuColumn(
                                     onSetBgImage(true)
                                 }
 
+
+                                it.chartData?.let { it1 -> onBarChartDataChange(it1) }
+                                showDialog = false
 
                                /* Log.i(
                                     "DesignActivity",
