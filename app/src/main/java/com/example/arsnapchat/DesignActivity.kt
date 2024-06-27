@@ -80,6 +80,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -125,9 +126,15 @@ import com.github.skydoves.colorpicker.compose.BrightnessSlider
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.OutputStream
 import kotlin.math.abs
 
@@ -1037,7 +1044,26 @@ fun EditorScreen(
     onSetBgImage: (Boolean) -> Unit
 ) {
 
+    var isMissSpelled by remember { mutableStateOf(false) }
+    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
+    var suggestions by remember { mutableStateOf(listOf<String>()) }
+    // State for dropdown menu
+    var isMenuOpen by remember { mutableStateOf(false) }
+    var selectedWord by remember { mutableStateOf("") }
+    val cont = LocalContext.current
+    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
+    var dictionary by remember {
+        // Initialize the dictionary in a coroutine to load asynchronously
+        mutableStateOf(setOf<String>()) // Initial empty list
+    }
 
+    LaunchedEffect(Unit) {
+        // Load the dictionary asynchronously when the component launches
+        val loadedDictionary = loadDictionary(cont)
+        dictionary = loadedDictionary
+    }
+    val scope = rememberCoroutineScope()
+    var lastWord = ""
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
     Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
@@ -1311,7 +1337,7 @@ fun EditorScreen(
                     Log.d("Barchartdatwa", "$data ---dataPoints")
                     BarChart(data.labels, data.dataPoints)
                 }
-                if (isKeyboardVisible.value) {
+               /* if (isKeyboardVisible.value) {
                     Row(
                         modifier = Modifier
                             .background(Color.LightGray)
@@ -1344,6 +1370,66 @@ fun EditorScreen(
                             )
                         }
                     }
+                }*/
+
+                if (isKeyboardVisible.value) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .background(Color.LightGray)
+                        ) {
+                            IconButton(
+                                onClick = { onBoldChange(!isBold) },
+                                modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_bold_24),
+                                    contentDescription = "Bold"
+                                )
+                            }
+                            IconButton(
+                                onClick = { onItalicChange(!isItalic) },
+                                modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_italic_24),
+                                    contentDescription = "Italic"
+                                )
+                            }
+                            IconButton(
+                                onClick = { onUnderLineChange(!isUnderline) },
+                                modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_underlined_24),
+                                    contentDescription = "Underline"
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.padding(start = 10.dp))
+                        if (isMissSpelled) {
+                            Row {
+                                IconButton(
+                                    onClick = {
+//                                    suggestions = getSuggestions(misspelledWord)
+                                        isMenuOpen = true
+                                    },
+                                    modifier = Modifier
+                                        .background(Color.Red)
+
+                                ) {
+                                    Icon(
+                                        painterResource(id = R.drawable.baseline_error_24),
+                                        contentDescription = "Underline",
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                 }
 
 
@@ -1377,13 +1463,73 @@ fun EditorScreen(
                         )
                     )
 
+                    scope.launch {
+                        delay(3 * 1000L) // 1 second delay
+                        lastWord = content.text.split(" ").lastOrNull() ?: ""
+                        isMissSpelled = !dictionary.contains(lastWord)
+                        if (isMissSpelled) suggestions = getRelatedWords(lastWord = lastWord,dictionary)
+                        Log.d("TextFieldisMissSpelled", "Text input:, isMissSpelled: $isMissSpelled")
+                        Log.d("isdatais ",lastWord)
+                    }
+
                 }
 
             }
         }
     }
-}
+    DropdownMenu(
+        expanded = isMenuOpen,
+        onDismissRequest = { isMenuOpen = false },
+        offset = DpOffset(x = 30.dp, y = 4.dp)
+    ) {
 
+        if (suggestions.isNotEmpty()) {
+            suggestions.forEach { suggestion ->
+                DropdownMenuItem(
+                    text = { Text(suggestion) },
+                    onClick = {
+                        selectedWord = suggestion
+//                        textInput = textInput.replace(selectedWord, suggestion, true)
+                        isMenuOpen = false
+                    }
+                )
+            }
+        }else isMenuOpen = false
+    }
+}
+suspend fun loadDictionary(context: Context): Set<String> {
+    return withContext(Dispatchers.IO) {
+        val words = mutableSetOf<String>()
+        context.assets.open("en_US.dic").use { inputStream ->
+            BufferedReader(InputStreamReader(inputStream)).useLines { lines ->
+                lines.forEach { line ->
+                    val word = line.trim().removeSuffix("/").substringBefore("/").toLowerCase()
+                    if (word.isNotEmpty()) {
+                        words.add(word)
+                    }
+                }
+            }
+        }
+        return@withContext words
+    }
+}
+fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
+    val suggestions = mutableListOf<String>()
+
+    // Case 1: Check for words starting with the same characters as lastWord
+    val startingWithSameChars = dictionary.filter { it.startsWith(lastWord, ignoreCase = true) }
+    suggestions.addAll(startingWithSameChars.take(5))
+
+    // Case 2: If no words found in Case 1, check for words containing lastWord
+    if (suggestions.isEmpty()) {
+        val containingChars = dictionary.filter { it.contains(lastWord, ignoreCase = true) }
+        suggestions.addAll(containingChars.take(5))
+    }
+
+    Log.i("DesignActivity","suggestionList- $suggestions")
+
+    return suggestions
+}
 fun getBitmapFromUri(context: Context,uri: Uri):Bitmap? {
 
         val contentResolver = context.contentResolver
@@ -1414,12 +1560,12 @@ fun bitmapToBase64(bitmap: Bitmap): String {
 
 
 fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
-    try {
+    return try {
         val byteArray = Base64.decode(base64String, Base64.DEFAULT)
-        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
     } catch (e: Exception) {
         e.printStackTrace()
-        return try {
+        try {
             val inputStream = context.contentResolver.openInputStream(base64String.toUri())
             BitmapFactory.decodeStream(inputStream)
         } catch (e: Exception) {
