@@ -66,6 +66,12 @@ dependencies {
     implementation "io.coil-kt:coil-compose:2.1.0"
     implementation "com.github.skydoves:colorpicker-compose:1.0.0"
     implementation 'com.google.code.gson:gson:2.8.8'
+    // spell checker
+    /*implementation "org.apache.lucene:lucene-core:8.11.1"
+    implementation "org.apache.lucene:lucene-analyzers-common:8.11.1"
+    implementation "org.apache.lucene:lucene-queries:8.11.1"*/
+
+    implementation 'com.github.jnr:jnr-ffi:2.1.14'
 }
 
 apply plugin: 'org.jetbrains.kotlin.android'

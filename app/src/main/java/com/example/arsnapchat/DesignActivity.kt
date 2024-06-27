@@ -1,18 +1,23 @@
 package com.example.arsnapchat
 
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.ViewTreeObserver
+import android.view.textservice.SentenceSuggestionsInfo
+import android.view.textservice.SpellCheckerSession
+import android.view.textservice.SuggestionsInfo
+import android.view.textservice.TextInfo
+import android.view.textservice.TextServicesManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -49,6 +54,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -70,6 +77,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,14 +93,22 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
@@ -100,7 +116,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import coil.compose.rememberAsyncImagePainter
-import coil.compose.rememberImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
 import com.example.arsnapchat.model.ChartData
@@ -115,11 +130,21 @@ import com.github.skydoves.colorpicker.compose.BrightnessSlider
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.google.gson.Gson
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStreamReader
+import java.util.Locale
 import kotlin.math.abs
 
 
-class DesignActivity : ComponentActivity() {
+
+class DesignActivity : ComponentActivity(),SpellCheckerSession.SpellCheckerSessionListener {
     var intitalfont: String = ""
     var mcontext: Context? = null
 
@@ -139,6 +164,14 @@ class DesignActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
+        TODO("Not yet implemented")
+    }
+
+    override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
+        TODO("Not yet implemented")
     }
 }
 
@@ -629,6 +662,7 @@ fun replaceTextAtIndex(contents: List<Content>, index: Int?, newText: String): L
 
 }
 
+@SuppressLint("RememberReturnType")
 @Composable
 fun ToolbarSection() {
 
@@ -692,7 +726,7 @@ fun ToolbarSection() {
             }
         }
     )
-
+//    val dictionaryPath = File(context.filesDir, "hunspell").absolutePath
 
     Box(
         modifier = Modifier
@@ -809,13 +843,32 @@ fun ToolbarSection() {
                 barChartData = barChartData,
                 selectedBgUri,
                 setBgImage,
-                onSetBgImage = { setBgImage = it }
+                onSetBgImage = { setBgImage = it },
+//                dictionaryPath = dictionaryPath
             )
         }
 
 
     }
 
+}
+fun copyHunspellDictionaries(context: Context) {
+    val assetManager = context.assets
+    val files = listOf("en_US.aff", "en_US.dic")
+//    val files = listOf("hunspell/en_US.aff", "hunspell/en_US.dic")
+    val destDir = File(context.filesDir, "hunspell")
+    if (!destDir.exists()) {
+        destDir.mkdirs()
+    }
+
+    for (file in files) {
+        val inputStream = assetManager.open(file)
+        val outFile = File(destDir, file.split("/").last())
+        val outputStream = FileOutputStream(outFile)
+        inputStream.copyTo(outputStream)
+        inputStream.close()
+        outputStream.close()
+    }
 }
 
 
@@ -933,10 +986,9 @@ fun loadFromSharedPreferences(context: Context, key: String): String? {
     return sharedPreferences.getString(key, null)
 }
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen(
+fun EditorScreen1(
     selectedColor: Color,
     selectedFont: String,
     selectedFontSize: TextUnit,
@@ -957,29 +1009,41 @@ fun EditorScreen(
     barChartData: BarChartData? = null,
     selectedImageUri: Uri?,
     setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit
+    onSetBgImage: (Boolean) -> Unit,
 ) {
     var textInput by remember { mutableStateOf("Type here...") }
     var fontSize by remember { mutableStateOf(10.sp) }
     var isBold1 by remember { mutableStateOf(false) }
     var isItalic1 by remember { mutableStateOf(false) }
     var isUnderline by remember { mutableStateOf(false) }
-
-    /* var fontSize by remember { mutableStateOf(10.sp) }
-     var isBold by remember { mutableStateOf(false) }
-     var isItalic by remember { mutableStateOf(false) }*/
-
-    /* var onImageSelectURL by remember {
-         mutableStateOf(0)
-     }*/
-
+    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
+
 
     KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
         isKeyboardVisible.value = isVisible
     })
+    // Initialize the spell checker session
+    val cont = LocalContext.current
+//    val dictionary = remember { loadDictionary(cont) }
+//    Log.d("isKeyboardVisibleU", "$dictionary")
+    val spellCheckerSession = remember {
+        val textServicesManager = cont.getSystemService(TextServicesManager::class.java)
+        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
+            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
+                val newMisspelledWords = mutableListOf<String>()
+                for (result in results) {
+                    if (result.suggestionsCount > 0) {
+                        newMisspelledWords.add(result.getSuggestionAt(0))
+                    }
+                }
+                misspelledWords = newMisspelledWords
+            }
+
+            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {}
+        }, true)
+    }
 // Remember the scroll state
     val scrollState = rememberScrollState()
 
@@ -987,6 +1051,7 @@ fun EditorScreen(
     val fontInt = getFontListFromAssets().get(selectedFont)
 
     var backgroundcolor = selectedBackgroundColor
+
 
     Box(
         modifier = Modifier
@@ -1057,25 +1122,6 @@ fun EditorScreen(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Column(modifier = Modifier.fillMaxSize()) {
-                // Display text contents in a Column
-
-
-                // Display image contents in a LazyVerticalGrid
-                /* LazyVerticalGrid(
-                     columns = GridCells.Adaptive(minSize = 100.dp),
-                     modifier = Modifier.fillMaxWidth()
-                 ) {
-                     items(contents.filterIsInstance<Content.Image>()) { content ->
-                         Image(
-                             painter = rememberAsyncImagePainter(model = content.uri),
-                             contentDescription = null,
-                             modifier = Modifier
-                                 .fillMaxWidth()
-                                 .height(200.dp)
-                                 .padding(bottom = 8.dp)
-                         )
-                     }
-                 }*/
                 // Display image, audio, and video contents in a LazyVerticalGrid
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
@@ -1151,6 +1197,20 @@ fun EditorScreen(
                     Log.d("Barchartdatwa", "$data ---dataPoints")
                     BarChart(data.labels, data.dataPoints)
                 }
+
+                /*val annotatedText = buildAnnotatedString {
+                    val words = textInput.split(" ")
+                    words.forEach { word ->
+                        if (word in misspelledWords) {
+                            withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
+                                append("$word ")
+                            }
+                        } else {
+                            append("$word ")
+                        }
+                    }
+                }*/
+
                 if (isKeyboardVisible.value) {
                     Row(
                         modifier = Modifier
@@ -1185,33 +1245,10 @@ fun EditorScreen(
                         }
                     }
                 }
-
-               /* Column(modifier = Modifier.fillMaxSize()) {
-                    TextField(
-                        value = textInput,
-                        onValueChange = {
-                            textInput = it,
-                            onTextChange(it)
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor,
-                            cursorColor = Color.Black
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Normal)
-                            )
-                        )
-                    )
-                }*/
+                // Simulate spell checking when text input changes
+                LaunchedEffect(textInput) {
+                    spellCheckerSession?.getSuggestions(TextInfo(textInput), 5)
+                }
 
                 contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
@@ -1268,10 +1305,1058 @@ fun EditorScreen(
                             )
                         )
                     )
+                    if (misspelledWords.isNotEmpty()) {
+                        Log.d("misspelledWords",misspelledWords.toString())
+                        Column(modifier = Modifier.padding(top = 16.dp)) {
+                            Text("Misspelled Words:", color = Color.Red)
+                            misspelledWords.forEach { word ->
+                                Text(word, color = Color.Red)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditorScreen2(
+    selectedColor: Color,
+    selectedFont: String,
+    selectedFontSize: TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
+    selectedBackgroundColor: Color,
+    contents: List<Content>,
+    onFontSizeChange: (Float) -> Unit,
+    onBoldChange: (Boolean) -> Unit,
+    onItalicChange: (Boolean) -> Unit,
+    onTextChange: (String) -> Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
+    shouldShowDialog: Boolean,
+    onShowBackImageDialog: (Boolean) -> Unit,
+    openImagePicker: (Boolean) -> Unit,
+    imageList: List<Int>,
+    barChartData: BarChartData? = null,
+    selectedImageUri: Uri?,
+    setBgImage: Boolean,
+    onSetBgImage: (Boolean) -> Unit,
+) {
+    var textInput by remember { mutableStateOf("Type here...") }
+    var fontSize by remember { mutableStateOf(10.sp) }
+    var isBold1 by remember { mutableStateOf(false) }
+    var isItalic1 by remember { mutableStateOf(false) }
+    var isUnderline by remember { mutableStateOf(false) }
+    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
+
+    val isKeyboardVisible = remember { mutableStateOf(false) }
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
+
+    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
+        isKeyboardVisible.value = isVisible
+    })
+
+    val cont = LocalContext.current
+    // Initialize the spell checker session
+    val spellCheckerSession = remember {
+        val textServicesManager = cont.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as TextServicesManager
+        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
+            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
+                val newMisspelledWords = mutableListOf<String>()
+                for (result in results) {
+                    if (result.suggestionsCount > 0) {
+                        newMisspelledWords.add(result.getSuggestionAt(0))
+                    }
+                }
+                misspelledWords = newMisspelledWords
+                Log.d("SpellChecker", "Misspelled words: $misspelledWords")
+            }
+
+            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {
+                // Not implemented for this example
+            }
+        }, true)
+    }
+
+    val scrollState = rememberScrollState()
+    val fontInt = getFontListFromAssets().get(selectedFont)
+    var backgroundcolor = selectedBackgroundColor
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
+    ) {
+        if (selectedImageURL == 2) {
+            openImagePicker(true)
+            onImageSelectURL(3)
+        } else if (selectedImageURL == 3) {
+            if (setBgImage) {
+                backgroundcolor = Color.Transparent
+                Image(
+                    painter = rememberAsyncImagePainter(selectedImageUri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else if (selectedImageURL > 1) {
+            backgroundcolor = Color.Transparent
+            Image(
+                painter = painterResource(id = selectedImageURL),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            backgroundcolor = selectedBackgroundColor
+        }
+
+        ImageListAlertDialog(
+            shouldShowDialog,
+            onDismiss = { onShowBackImageDialog(false) },
+            onImageSelectedUrl = { onImageSelectURL(it) },
+            pickfromGallery = { onSetBgImage(it) },
+            imageList
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundcolor)
+        ) {
+            Slider(
+                value = selectedFontSize.value,
+                onValueChange = { onFontSizeChange(it) },
+                valueRange = 10f..30f,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(contents) { content ->
+                        when (content) {
+                            is Content.Image -> {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = content.uri),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
+                            is Content.Audio -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.music_file),
+                                        contentDescription = "Audio",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+                            is Content.Video -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.video_file),
+                                        contentDescription = "Video",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+
+                barChartData?.let { data ->
+                    Log.d("Barchartdatwa", "$data ---dataPoints")
+                    BarChart(data.labels, data.dataPoints)
+                }
+
+                if (isKeyboardVisible.value) {
+                    Row(
+                        modifier = Modifier.background(Color.LightGray)
+                    ) {
+                        IconButton(
+                            onClick = { isBold1 = !isBold1 },
+                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_bold_24),
+                                contentDescription = "Bold"
+                            )
+                        }
+                        IconButton(
+                            onClick = { isItalic1 = !isItalic1 },
+                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_italic_24),
+                                contentDescription = "Italic"
+                            )
+                        }
+                        IconButton(
+                            onClick = { isUnderline = !isUnderline },
+                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_underlined_24),
+                                contentDescription = "Underline"
+                            )
+                        }
+                    }
+                }
+
+                LaunchedEffect(textInput) {
+                    spellCheckerSession?.getSuggestions(TextInfo(textInput), 5)
+                }
+
+                contents.filterIsInstance<Content.Text>().forEach { content ->
+                    TextField(
+                        value = content.text,
+                        onValueChange = {
+                            textInput = it
+                            onTextChange(it)
+                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor,
+                            cursorColor = Color.Black
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = selectedFontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            color = selectedColor,
+                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                        )
+                    )
+                }
+
+                if (contents.isEmpty()) {
+                    BasicTextField(
+                        value = textInput,
+                        onValueChange = {
+                            textInput = it
+                            onTextChange(it)
+                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(0.5.dp, Color.White),
+                        textStyle = TextStyle(
+                            fontSize = fontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                            color = selectedColor,
+                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                        ),
+                        decorationBox = { innerTextField ->
+                            val annotatedText = buildAnnotatedString {
+                                val words = textInput.split(" ")
+                                words.forEach { word ->
+                                    if (word in misspelledWords) {
+                                        withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
+                                            append("$word ")
+                                        }
+                                    } else {
+                                        append("$word ")
+                                    }
+                                }
+                            }
+                            Text(
+                                text = annotatedText,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            innerTextField()
+                        }
+                    )
+
+                    if (misspelledWords.isNotEmpty()) {
+                        Log.d("misspelledWords", misspelledWords.toString())
+                        Column(modifier = Modifier.padding(top = 16.dp)) {
+                            Text("Misspelled Words:", color = Color.Red)
+                            misspelledWords.forEach { word ->
+                                Text(word, color = Color.Red)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditorScreen(
+    selectedColor: Color,
+    selectedFont: String,
+    selectedFontSize: TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
+    selectedBackgroundColor: Color,
+    contents: List<Content>,
+    onFontSizeChange: (Float) -> Unit,
+    onBoldChange: (Boolean) -> Unit,
+    onItalicChange: (Boolean) -> Unit,
+    onTextChange: (String) -> Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
+    shouldShowDialog: Boolean,
+    onShowBackImageDialog: (Boolean) -> Unit,
+    openImagePicker: (Boolean) -> Unit,
+    imageList: List<Int>,
+    barChartData: BarChartData? = null,
+    selectedImageUri: Uri?,
+    setBgImage: Boolean,
+    onSetBgImage: (Boolean) -> Unit,
+) {
+    var textInput by remember { mutableStateOf("Zukor ") }
+    var fontSize by remember { mutableStateOf(10.sp) }
+    var isBold1 by remember { mutableStateOf(false) }
+    var isItalic1 by remember { mutableStateOf(false) }
+    var isUnderline by remember { mutableStateOf(false) }
+    var isMissSpelled by remember { mutableStateOf(false) }
+    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
+    var suggestions by remember { mutableStateOf(listOf<String>()) }
+    // State for dropdown menu
+    var isMenuOpen by remember { mutableStateOf(false) }
+    var selectedWord by remember { mutableStateOf("") }
+
+    val isKeyboardVisible = remember { mutableStateOf(false) }
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
+
+    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
+        isKeyboardVisible.value = isVisible
+    })
+
+    val cont = LocalContext.current
+    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
+    var dictionary by remember {
+        // Initialize the dictionary in a coroutine to load asynchronously
+        mutableStateOf(setOf<String>()) // Initial empty list
+    }
+
+    LaunchedEffect(Unit) {
+        // Load the dictionary asynchronously when the component launches
+        val loadedDictionary = loadDictionary(cont)
+        dictionary = loadedDictionary
+    }
+
+    Log.d("isKeyboardVisibleUD", "$dictionary")
+
+    // Remember the scroll state
+    val scrollState = rememberScrollState()
+    val fontInt = getFontListFromAssets().get(selectedFont)
+    var backgroundcolor = selectedBackgroundColor
+    val scope = rememberCoroutineScope()
+    var lastWord = ""
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
+    ) {
+        if (selectedImageURL == 2) {
+            openImagePicker(true)
+            onImageSelectURL(3)
+        } else if (selectedImageURL == 3 && setBgImage) {
+            backgroundcolor = Color.Transparent
+            Image(
+                painter = rememberAsyncImagePainter(selectedImageUri),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (selectedImageURL > 1) {
+            backgroundcolor = Color.Transparent
+            Image(
+                painter = painterResource(id = selectedImageURL),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            backgroundcolor = selectedBackgroundColor
+        }
+
+        ImageListAlertDialog(
+            shouldShowDialog,
+            onDismiss = { onShowBackImageDialog(false) },
+            onImageSelectedUrl = { onImageSelectURL(it) },
+            pickfromGallery = { onSetBgImage(it) },
+            imageList
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundcolor)
+        ) {
+            var isdata = false
+
+            Slider(
+                value = selectedFontSize.value,
+                onValueChange = { onFontSizeChange(it) },
+                valueRange = 10f..30f,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(contents) { content ->
+                        when (content) {
+                            is Content.Image -> {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = content.uri),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
+
+                            is Content.Audio -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.music_file),
+                                        contentDescription = "Audio",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+
+                            is Content.Video -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.video_file),
+                                        contentDescription = "Video",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+
+                            else -> {}
+                        }
+                    }
+                }
+
+                barChartData?.let { data ->
+                    Log.d("Barchartdatwa", "$data ---dataPoints")
+                    BarChart(data.labels, data.dataPoints)
+                }
+
+                if (isKeyboardVisible.value) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+
+                    ) {
+                        Row(
+                            modifier = Modifier.background(Color.LightGray)
+                        ) {
+                            IconButton(
+                                onClick = { isBold1 = !isBold1 },
+                                modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_bold_24),
+                                    contentDescription = "Bold"
+                                )
+                            }
+                            IconButton(
+                                onClick = { isItalic1 = !isItalic1 },
+                                modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_italic_24),
+                                    contentDescription = "Italic"
+                                )
+                            }
+                            IconButton(
+                                onClick = { isUnderline = !isUnderline },
+                                modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_format_underlined_24),
+                                    contentDescription = "Underline"
+                                )
+                            }
+
+                        }
+                        Spacer(modifier = Modifier.padding(start = 10.dp))
+                        if (isMissSpelled) {
+                        Row {
+                            IconButton(
+                                onClick = {
+//                                    suggestions = getSuggestions(misspelledWord)
+                                    isMenuOpen = true
+                                },
+                                modifier = Modifier
+                                    .background(Color.Red)
+
+                            ) {
+                                Icon(
+                                    painterResource(id = R.drawable.baseline_error_24),
+                                    contentDescription = "Underline",
+                                )
+                            }
+                        }
+                    }
+                }
+
+                }
+
+
+
+                val newMisspelledWords = mutableListOf<String>()
+                val annotatedText = buildAnnotatedString {
+                    var words = textInput.lowercase(Locale.ROOT).split(" ")
+                    contents.filterIsInstance<Content.Text>().forEach{
+                        words =  it.text.lowercase(Locale.ROOT).split(" ")
+                    }
+
+                    words.forEach { word ->
+                        if (word in dictionary) {
+                            append("$word ")
+                            Log.d("IFBLOCKIF", "Text input: $word")
+                        } else {
+                            withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
+                                append("$word ")
+                                newMisspelledWords.add(word)
+                                misspelledWords= newMisspelledWords
+                                val nonEmptyWords = newMisspelledWords.filter { it.isNotEmpty() }
+                                    .toSet()
+                                (misspelledWords as MutableList<String>).addAll(nonEmptyWords)
+                                if (misspelledWords[0] != "") {
+//                                    isMissSpelled = true
+                                    Log.d("IFBLOCKIF112", "rlsr 1212input: -- $misspelledWords")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var txt = annotatedText.text
+                Log.d("misspelledWords121", "annoted "+ misspelledWords)
+                contents.filterIsInstance<Content.Text>().forEach { content ->
+
+                    isdata = true
+                    TextField(
+                        value = content.text,
+                        onValueChange = {
+                            txt = it
+                            onTextChange(it)
+                            if (!it.isEmpty()) {
+//                                spellCheckerSession?.getSuggestions(TextInfo(it), 5)
+                                Log.d("TextField", "Text input: $it")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor,
+                            cursorColor = Color.Black
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = selectedFontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                            color = selectedColor,
+                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                        )
+
+                    )
+                    scope.cancel()
+                    scope.launch {
+                        delay(3 * 1000L) // 1 second delay
+                        lastWord = content.text.split(" ").lastOrNull() ?: ""
+                        isMissSpelled = !dictionary.contains(lastWord)
+                        if (isMissSpelled) suggestions = getRelatedWords(lastWord = lastWord,dictionary)
+                        Log.d("TextFieldisMissSpelled", "Text input:, isMissSpelled: $isMissSpelled")
+                        Log.d("isdatais ",lastWord)
+                    }
+                }
+
+//                 lastWord = textInput.split(" ").lastOrNull() ?: ""
+
+
+                if (!isdata) {
+                    TextField(
+                        value = txt,
+                        onValueChange = {
+                            textInput = it
+                            onTextChange(it)
+//                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
+                            Log.d("TextField", "Text input: $it")
+                        },
+
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .border(0.5.dp, Color.White),
+                        colors = TextFieldDefaults.textFieldColors(
+                            containerColor = backgroundcolor,
+                            cursorColor = Color.Black
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = fontSize,
+                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                            color = selectedColor,
+                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal)),
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text, // Specify the keyboard type here
+                            imeAction = ImeAction.Done // Optional: Define action button on keyboard
+                        )
+                    )
+                }
+            }
+
+        }
+    }
+    // Dropdown menu
+    DropdownMenu(
+        expanded = isMenuOpen,
+        onDismissRequest = { isMenuOpen = false },
+        offset = DpOffset(x = 30.dp, y = 4.dp)
+    ) {
+
+        if (suggestions.isNotEmpty()) {
+            suggestions.forEach { suggestion ->
+                DropdownMenuItem(
+                    text = { Text(suggestion) },
+                    onClick = {
+                        selectedWord = suggestion
+                        textInput = textInput.replace(selectedWord, suggestion, true)
+                        isMenuOpen = false
+                    }
+                )
+            }
+        }else isMenuOpen = false
+    }
+}
+
+
+fun showMenu() {
+
+}
+fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
+    val suggestions = mutableListOf<String>()
+
+    // Case 1: Check for words starting with the same characters as lastWord
+    val startingWithSameChars = dictionary.filter { it.startsWith(lastWord, ignoreCase = true) }
+    suggestions.addAll(startingWithSameChars.take(5))
+
+    // Case 2: If no words found in Case 1, check for words containing lastWord
+    if (suggestions.isEmpty()) {
+        val containingChars = dictionary.filter { it.contains(lastWord, ignoreCase = true) }
+        suggestions.addAll(containingChars.take(5))
+    }
+
+    Log.i("DesignActivity","suggestionList- $suggestions")
+
+    return suggestions
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditorScreen11(
+    selectedColor: Color,
+    selectedFont: String,
+    selectedFontSize: TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
+    selectedBackgroundColor: Color,
+    contents: List<Content>,
+    onFontSizeChange: (Float) -> Unit,
+    onBoldChange: (Boolean) -> Unit,
+    onItalicChange: (Boolean) -> Unit,
+    onTextChange: (String) -> Unit,
+    onImageSelectURL: (Int) -> Unit,
+    selectedImageURL: Int,
+    shouldShowDialog: Boolean,
+    onShowBackImageDialog: (Boolean) -> Unit,
+    openImagePicker: (Boolean) -> Unit,
+    imageList: List<Int>,
+    barChartData: BarChartData? = null,
+    selectedImageUri: Uri?,
+    setBgImage: Boolean,
+    onSetBgImage: (Boolean) -> Unit,
+) {
+    var textInput by remember { mutableStateOf("Zukor ") }
+    var fontSize by remember { mutableStateOf(10.sp) }
+    var isBold1 by remember { mutableStateOf(false) }
+    var isItalic1 by remember { mutableStateOf(false) }
+    var isUnderline by remember { mutableStateOf(false) }
+    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
+
+    val isKeyboardVisible = remember { mutableStateOf(false) }
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
+
+    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
+        isKeyboardVisible.value = isVisible
+    })
+
+    // Initialize the spell checker session
+    val cont = LocalContext.current
+    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
+    var dictionary by remember {
+        // Initialize the dictionary in a coroutine to load asynchronously
+        mutableStateOf(setOf<String>()) // Initial empty list
+    }
+
+    LaunchedEffect(Unit) {
+        // Load the dictionary asynchronously when the component launches
+        val loadedDictionary = loadDictionary(cont)
+        dictionary = loadedDictionary
+    }
+
+    val spellCheckerSession = remember {
+        val textServicesManager = cont.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as TextServicesManager
+        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
+            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
+                val newMisspelledWords = mutableListOf<String>()
+                for (result in results) {
+                    val wordId = result.suggestionsAttributes and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY.inv()
+                    val originalWord = textInput.split(" ")[wordId]
+                    if (result.suggestionsCount > 0) {
+                        newMisspelledWords.add(originalWord)
+                    }
+                }
+                misspelledWords = newMisspelledWords
+                Log.d("SpellChecker", "Misspelled words: $misspelledWords")
+            }
+
+            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {
+                // Not implemented for this example
+            }
+        }, true)
+    }
+
+    // Remember the scroll state
+    val scrollState = rememberScrollState()
+    val fontInt = getFontListFromAssets().get(selectedFont)
+    var backgroundcolor = selectedBackgroundColor
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
+    ) {
+        if (selectedImageURL == 2) {
+            openImagePicker(true)
+            onImageSelectURL(3)
+        } else if (selectedImageURL == 3 && setBgImage) {
+            backgroundcolor = Color.Transparent
+            Image(
+                painter = rememberAsyncImagePainter(selectedImageUri),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (selectedImageURL > 1) {
+            backgroundcolor = Color.Transparent
+            Image(
+                painter = painterResource(id = selectedImageURL),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            backgroundcolor = selectedBackgroundColor
+        }
+
+        ImageListAlertDialog(
+            shouldShowDialog,
+            onDismiss = { onShowBackImageDialog(false) },
+            onImageSelectedUrl = { onImageSelectURL(it) },
+            pickfromGallery = { onSetBgImage(it) },
+            imageList
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundcolor)
+        ) {
+            var isdata = false
+
+            Slider(
+                value = selectedFontSize.value,
+                onValueChange = { onFontSizeChange(it) },
+                valueRange = 10f..30f,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 100.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(contents) { content ->
+                        when (content) {
+                            is Content.Image -> {
+                                Image(
+                                    painter = rememberAsyncImagePainter(model = content.uri),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
+
+                            is Content.Audio -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.music_file),
+                                        contentDescription = "Audio",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+
+                            is Content.Video -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.video_file),
+                                        contentDescription = "Video",
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(100.dp)
+                                            .padding(bottom = 4.dp)
+                                    )
+                                    val context = LocalContext.current
+                                    Text(
+                                        text = getFileNameFromUri(context, content.uri),
+                                        textAlign = TextAlign.Center,
+                                        style = TextStyle(fontSize = 14.sp)
+                                    )
+                                }
+                            }
+
+                            else -> {}
+                        }
+                    }
+                }
+
+                barChartData?.let { data ->
+                    Log.d("Barchartdatwa", "$data ---dataPoints")
+                    BarChart(data.labels, data.dataPoints)
+                }
+
+                if (isKeyboardVisible.value) {
+                    Row(
+                        modifier = Modifier.background(Color.LightGray)
+                    ) {
+                        IconButton(
+                            onClick = { isBold1 = !isBold1 },
+                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_bold_24),
+                                contentDescription = "Bold"
+                            )
+                        }
+                        IconButton(
+                            onClick = { isItalic1 = !isItalic1 },
+                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_italic_24),
+                                contentDescription = "Italic"
+                            )
+                        }
+                        IconButton(
+                            onClick = { isUnderline = !isUnderline },
+                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
+                        ) {
+                            Icon(
+                                painterResource(id = R.drawable.baseline_format_underlined_24),
+                                contentDescription = "Underline"
+                            )
+                        }
+                    }
+                }
+
+                TextField(
+                    value = textInput,
+                    onValueChange = {
+                        textInput = it
+                        onTextChange(it)
+                        spellCheckerSession?.getSuggestions(TextInfo(it), 5)
+                        Log.d("TextField", "Text input: $it")
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .border(0.5.dp, Color.White),
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = backgroundcolor,
+                        cursorColor = Color.Black
+                    ),
+                    textStyle = TextStyle(
+                        fontSize = selectedFontSize,
+                        fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
+                        fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                        textDecoration = if (isUnderline) {
+                            TextDecoration.Underline
+                        } else TextDecoration.None,
+                        color = selectedColor,
+                        fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                    ),
+                    visualTransformation = VisualTransformation { text ->
+                        val builder = AnnotatedString.Builder(text)
+                        misspelledWords.forEach { word ->
+                            val startIndex = text.indexOf(word)
+                            if (startIndex != -1) {
+                                builder.addStyle(
+                                    style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline),
+                                    start = startIndex,
+                                    end = startIndex + word.length
+                                )
+                            }
+                        }
+                        TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+                    }
+                )
+
+                if (misspelledWords.isNotEmpty()) {
+                    Log.d("misspelledWords121", misspelledWords.toString())
+                    Column(modifier = Modifier.padding(top = 16.dp)) {
+                        Text("Misspelled Words:", color = Color.Red)
+                        misspelledWords.forEach { word ->
+                            Text(word, color = Color.Red)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+
+suspend fun loadDictionary(context: Context): Set<String> {
+    return withContext(Dispatchers.IO) {
+        val words = mutableSetOf<String>()
+        context.assets.open("en_US.dic").use { inputStream ->
+            BufferedReader(InputStreamReader(inputStream)).useLines { lines ->
+                lines.forEach { line ->
+                    val word = line.trim().removeSuffix("/").substringBefore("/").toLowerCase()
+                    if (word.isNotEmpty()) {
+                        words.add(word)
+                    }
+                }
+            }
+        }
+        return@withContext words
+    }
+}
+
+fun checkSpelling(text: String, hunspell: Hunspell): List<String> {
+    val misspelledWords = mutableListOf<String>()
+    val words = text.split(" ")
+    words.forEach { word ->
+        if (!hunspell.spell(word)) {
+            misspelledWords.add(word)
+        }
+    }
+    return misspelledWords
 }
 
 @Composable
