@@ -1,23 +1,28 @@
 package com.example.arsnapchat
 
 
-import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.util.Log
+import android.view.View
 import android.view.ViewTreeObserver
-import android.view.textservice.SentenceSuggestionsInfo
-import android.view.textservice.SpellCheckerSession
-import android.view.textservice.SuggestionsInfo
-import android.view.textservice.TextInfo
-import android.view.textservice.TextServicesManager
+import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -54,8 +59,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -86,6 +89,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.painter.Painter
@@ -93,28 +97,20 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
+import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
@@ -131,28 +127,44 @@ import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileOutputStream
+import java.io.InputStream
 import java.io.InputStreamReader
-import java.util.Locale
+import java.io.OutputStream
 import kotlin.math.abs
 
 
-
-class DesignActivity : ComponentActivity(),SpellCheckerSession.SpellCheckerSessionListener {
+class DesignActivity : ComponentActivity() {
     var intitalfont: String = ""
     var mcontext: Context? = null
-
+    /*val RESULT_ENABLE: Int = 1
+    var devicePolicyManager: DevicePolicyManager? = null
+    var compName: ComponentName? = null*/
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         mcontext = this
+
+        /*devicePolicyManager = getSystemService(DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        compName = ComponentName(this, MyAdminReceiver::class.java)
+
+
+        if(intitalfont.isEmpty()) {
+            intitalfont="hello"
+            val intent: Intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+            intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, compName)
+            intent.putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                "Your explanation message here"
+            )
+            startActivityForResult(intent, RESULT_ENABLE)
+        }*/
 
         setContent {
             ARSnapchatTheme {
@@ -166,13 +178,12 @@ class DesignActivity : ComponentActivity(),SpellCheckerSession.SpellCheckerSessi
         }
     }
 
-    override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
-        TODO("Not yet implemented")
-    }
-
-    override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
-        TODO("Not yet implemented")
-    }
+   /* override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == RESULT_ENABLE && resultCode == RESULT_OK) {
+            // Device Admin enabled
+        }
+    }*/
 }
 
 
@@ -187,438 +198,6 @@ fun GreetingPreview() {
 }
 
 
-@Composable
-fun GreetingSection(name: String = "Geeks") {
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(15.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.Center) {
-            // heading text view
-            Text(text = "Good morning, $name", style = MaterialTheme.typography.headlineSmall)
-            Text(text = "We wish you have a good day!", style = MaterialTheme.typography.bodySmall)
-        }
-        // search icon
-        Icon(
-            painter = painterResource(id = R.drawable.baseline_search_24),
-            contentDescription = "Search",
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-// This is how we can create chip seaction at the top of app
-
-@Composable
-fun ChipSection(
-    // function with single argument
-    chips: List<String>
-) {
-    var selectedChipIndex by remember {
-        // it will not update the string
-        // but save and it will helpful for us
-        mutableStateOf(0)
-    }
-    LazyRow {
-        items(chips.size) {
-            androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .padding(start = 15.dp, top = 15.dp, bottom = 15.dp)
-                    .clickable {
-                        selectedChipIndex = it
-                    }
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        // this is basic condition for selected chip index
-
-                        if (selectedChipIndex == it) Color.Green
-                        else Color.Gray
-                    )
-                    .padding(15.dp)
-            ) {
-                Text(text = chips[it], color = Color.White)
-            }
-        }
-    }
-
-}
-
-// This function is for suggestion secation
-@Composable
-fun SuggestionSection(color: Color = Color.Blue) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .padding(15.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(color)
-            .padding(horizontal = 15.dp, vertical = 20.dp)
-            .fillMaxWidth()
-
-    ) {
-        Column {
-            // here are two text views or we can say only text
-
-            Text(
-                text = "Daily Coding",
-                // it can be litile bit confusing but
-                // it is just text style alternate
-                // of fontfamily in XML
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text( // same as above
-                text = "do at least . 3-10 problems / day",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White
-            )
-
-        }
-
-        androidx.compose.foundation.layout.Box( // box containing icon
-            contentAlignment = Alignment.Center, modifier = Modifier
-                .size(40.dp)
-                .clip(
-                    CircleShape
-                )
-                .background(Color.Green)
-                .padding(10.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_play_circle_24),
-                contentDescription = "Play",
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-    }
-}
-
-@Composable
-// this function tells us that
-// how menu item should look like
-fun BottomMenu(
-    items: List<BottomMenuContent>,
-    modifier: Modifier = Modifier,
-    activeHighlightColor: Color = Color.Green,
-    activeTextColor: Color = Color.White,
-    inactiveTextColor: Color = Color.White,
-    initialSelectedItemIndex: Int = 1
-) {
-    var selectedItemIndex by remember {
-        mutableStateOf(initialSelectedItemIndex)
-    }
-    Row(
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color.Blue)
-            .padding(15.dp)
-    ) {
-        // it is basically what we should have
-        // for creating an element of BottomMenuItem
-        items.forEachIndexed { index, item ->
-            BottomMenuItem(
-                item = item, isSelected = index == selectedItemIndex,
-                activeHighlightColor = activeHighlightColor,
-                inactiveTextColor = inactiveTextColor
-            ) {
-                selectedItemIndex = index
-            }
-        }
-
-
-    }
-}
-
-
-// it's basically how menu item should look like
-@Composable
-fun BottomMenuItem(
-    item: BottomMenuContent,
-    isSelected: Boolean = false,
-    activeHighlightColor: Color = Color.Green,
-    activeTextColor: Color = Color.White,
-    inactiveTextColor: Color = Color.Blue,
-    onItemClick: () -> Unit
-) {
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.clickable { onItemClick }) {
-// here are some peremetens
-        // for how elements will align
-        androidx.compose.foundation.layout.Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (isSelected) activeHighlightColor else Color.Transparent)
-                .padding(10.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = item.iconId),
-                contentDescription = item.title,
-                tint = if (isSelected) activeTextColor else inactiveTextColor,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Text(
-            text = item.title,
-            // it's basic condition
-            color = if (isSelected) activeTextColor else inactiveTextColor
-        )
-
-    }
-
-}
-
-@ExperimentalFoundationApi
-@Composable
-// here we have just passed the list of courses
-fun CourseSection(courses: List<Course>) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "courses",
-            style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(15.dp)
-        )
-        // we have used lazyVertically grid
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 7.5.dp, end = 7.5.dp, bottom = 100.dp),
-            modifier = Modifier.fillMaxHeight()
-        ) {
-            items(courses.size) {
-                // here we have to define how one of these item is look like
-                // we will tell after defining item design
-                // let me comment it for now and after
-                // creating you just have to remove
-
-                CourseItem(course = courses[it])
-            }
-
-        }
-
-    }
-
-
-}
-
-
-@Composable
-fun CourseItem(course: Course) {
-    BoxWithConstraints( // Box with some attributes
-        modifier = Modifier
-            .padding(7.5.dp)
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(R.color.colorAccent))
-    ) {
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        // setting 5 points for medium
-        // color or we can say for another
-        // Medium colored path
-        val mediumColoredPoint1 = Offset(0f, height * 0.3f)
-        val mediumColoredPoint2 = Offset(width * 0.1f, height * 0.35f)
-        val mediumColoredPoint3 = Offset(width * 0.4f, height * 0.05f)
-        val mediumColoredPoint4 = Offset(width * 0.75f, height * 0.7f)
-        val mediumColoredPoint5 = Offset(width * 1.4f, -height.toFloat())
-        // joining points to make curves with the help of path class
-        // path file that we have created earlier
-        // having function that just help to reduce our code
-        // and the function is standardQuadFromTo(m1,m2) taking
-        // two peramente and connect them
-        val mediumColoredPath = Path().apply {
-            moveTo(mediumColoredPoint1.x, mediumColoredPoint1.y)
-            standardQuadFromTo(mediumColoredPoint1, mediumColoredPoint2)
-            standardQuadFromTo(mediumColoredPoint2, mediumColoredPoint3)
-            standardQuadFromTo(mediumColoredPoint3, mediumColoredPoint4)
-            standardQuadFromTo(mediumColoredPoint4, mediumColoredPoint5)
-            lineTo(width.toFloat() + 100f, height.toFloat() + 100f)
-            lineTo(-100f, height.toFloat() + 100f)
-            close()
-        }
-
-        // it's another part of that
-        // texture with light color
-        // Light colored path
-        val lightPoint1 = Offset(0f, height * 0.35f)
-        val lightPoint2 = Offset(width * 0.1f, height * 0.4f)
-        val lightPoint3 = Offset(width * 0.3f, height * 0.35f)
-        val lightPoint4 = Offset(width * 0.65f, height.toFloat())
-        val lightPoint5 = Offset(width * 1.4f, -height.toFloat())
-
-        val lightColoredPath = Path().apply {
-            moveTo(lightPoint1.x, lightPoint1.y)
-            standardQuadFromTo(lightPoint1, lightPoint2)
-            standardQuadFromTo(lightPoint2, lightPoint3)
-            standardQuadFromTo(lightPoint3, lightPoint4)
-            standardQuadFromTo(lightPoint4, lightPoint5)
-            lineTo(width.toFloat() + 100f, height.toFloat() + 100f)
-            lineTo(-100f, height.toFloat() + 100f)
-            close()
-        }
-
-// canvas is used when we
-        // want to draw something
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            drawPath(// function for drawing paths
-                // just pass the path
-                path = mediumColoredPath, color = course.mediumColor
-            )
-            drawPath(// it's for the lighter path
-                path = lightColoredPath, color = course.lightColor
-            )
-        }
-
-// so , we have done with texture and
-        // now just creating box and other things
-        // box containing course elements
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(15.dp)
-        ) {
-            Text(
-                text = course.title,
-                style = MaterialTheme.typography.headlineMedium,
-                lineHeight = 26.sp,
-                modifier = Modifier.align(Alignment.TopStart)
-            )
-            Icon(
-                painter = painterResource(id = course.iconId),
-                contentDescription = course.title,
-                tint = Color.White,
-                modifier = Modifier.align(Alignment.BottomStart)
-            )
-            Text(
-                text = "Start",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clickable {
-                        // Handle the clicks
-                    }
-                    .align(Alignment.BottomEnd)
-                    .clip(
-                        RoundedCornerShape(10.dp)
-                    )
-                    .background(Color.Green)
-                    .padding(vertical = 6.dp, horizontal = 15.dp)
-            )
-
-        }
-    }
-}
-
-fun Path.standardQuadFromTo(from: Offset, to: Offset) {
-    // this function is basically draw
-    // a line to our second point and
-    // also smooth on that line and make it curve
-    quadraticBezierTo(from.x, from.y, abs(from.x + to.x) / 2f, abs(from.y + to.y) / 2f)
-}
-
-@ExperimentalFoundationApi
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    // HomeSccreen() this is the most outer box that will
-    // contain all the views,buttons,chips,etc.
-    Box(
-        modifier = Modifier
-            .background(Color(R.color.Beige2))
-            .fillMaxSize()
-    ) {
-        Column {
-            // this is the function for header
-            GreetingSection()
-            // it's for chipsSecation, and pass
-            // as many strings as you want
-            ChipSection(
-                chips = listOf(
-                    "Data structure",
-                    "Algorithm",
-                    "competitive programming",
-                    "python"
-                )
-            )
-            // function for suggestionSection
-            SuggestionSection()
-            // this is for course secation
-            CourseSection(
-                // function require list of courses and
-                // one course contain 5 attributes
-                courses = listOf(
-                    Course(
-                        title = "greek of the year",
-                        R.drawable.baseline_headphones_24,
-                        Color.Blue,
-                        Color.DarkGray,
-                        Color.LightGray
-                    ),
-                    Course(
-                        title = "How does AI Works",
-                        R.drawable.baseline_videocam_24,
-                        Color.Green,
-                        Color.Black,
-                        Color.Black
-                    ),
-                    Course(
-                        title = "Advance python Course",
-                        R.drawable.baseline_play_circle_24,
-                        Color(R.color.skyblue1),
-                        Color(R.color.skyblue2),
-                        Color(R.color.skyblue3)
-                    ),
-                    Course(
-                        title = "Advance Java Course",
-                        R.drawable.baseline_headphones_24,
-                        Color(R.color.Beige1),
-                        Color(R.color.Beige2),
-                        Color(R.color.Beige3)
-                    ),
-                    Course(
-                        title = "prepare for aptitude test",
-                        R.drawable.baseline_play_circle_24,
-                        Color(R.color.OrangeYellow1),
-                        Color(R.color.OrangeYellow2),
-                        Color(R.color.OrangeYellow3)
-                    ),
-                    Course(
-                        title = "How does AI Works",
-                        R.drawable.baseline_videocam_24,
-                        Color(R.color.LightGreen1),
-                        Color(R.color.LightGreen2),
-                        Color(R.color.LightGreen3)
-                    ),
-
-                    )
-            )
-
-
-        }
-
-        // this is the final one that is bottomMenu
-        BottomMenu(
-            items = listOf(
-                // having 5 instances
-                BottomMenuContent("Home", R.drawable.baseline_home_24),
-                BottomMenuContent("explore", R.drawable.baseline_explore_24),
-                BottomMenuContent("dark mode", R.drawable.baseline_shield_moon_24),
-                BottomMenuContent("videos", R.drawable.baseline_videocam_24),
-                BottomMenuContent("Profile", R.drawable.baseline_self_improvement_24),
-            ), modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-    }
-}
 
 @Composable
 @ExperimentalFoundationApi
@@ -662,7 +241,8 @@ fun replaceTextAtIndex(contents: List<Content>, index: Int?, newText: String): L
 
 }
 
-@SuppressLint("RememberReturnType")
+
+
 @Composable
 fun ToolbarSection() {
 
@@ -671,6 +251,7 @@ fun ToolbarSection() {
     var selectedFontSize by remember { mutableStateOf(10.sp) }
     var isBold by remember { mutableStateOf(false) }
     var isItalic by remember { mutableStateOf(false) }
+    var isUnderLine by remember { mutableStateOf(false) }
 
     var selectedColorPickerfor by remember {
         mutableStateOf(3)
@@ -685,13 +266,17 @@ fun ToolbarSection() {
         mutableStateOf(0)
     }
     var contents by remember { mutableStateOf(listOf<Content>()) }
+    val indexii = findFirstTextIndex(contents)
+    if(indexii==null) {
+        contents = contents + Content.Text("Type here !!")
+    }
     var barChartData by remember { mutableStateOf<BarChartData?>(null) }
 
 
     var shouldShowDialog by remember { mutableStateOf(false) }
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
-
+    Log.i("DesignActivity", "ToolbarSection initialised")
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
@@ -700,6 +285,7 @@ fun ToolbarSection() {
                 if (!isbgImagePicker) {
                     contents = contents + Content.Image(uri)
                     // setBgImage=false
+                    Log.i("DesignActivity", "ToolbarSection initialised")
                 } else {
                     selectedBgUri = uri
                     setBgImage = true
@@ -726,7 +312,7 @@ fun ToolbarSection() {
             }
         }
     )
-//    val dictionaryPath = File(context.filesDir, "hunspell").absolutePath
+
 
     Box(
         modifier = Modifier
@@ -773,6 +359,7 @@ fun ToolbarSection() {
                 selectedFontSize = selectedFontSize.value,
                 isBold = isBold,
                 isItalic = isItalic,
+                isUnderline = isUnderLine,
 
                 onBarChartDataChange = { barChartData = it },
                 onTextChange = {
@@ -784,10 +371,14 @@ fun ToolbarSection() {
                         contents = replaceTextAtIndex(contents, index, it)
                     }
                 },
+                onImageChange={contents = contents + Content.Image(it)},
+                onVideoChange ={contents = contents + Content.Video(it)},
+                onAudioChange={contents = contents + Content.Audio(it)},
                 onFontColorChange = { selectedColor = it },
                 onFontSizeChange = { selectedFontSize = it.sp },
                 onBoldChange = { isBold = it },
                 onItalicChange = { isItalic = it },
+                onUnderLineChange = {isUnderLine=it},
                 onImageSelectURL = { onImageSelectURL = it },
                 selectedImageURL = onImageSelectURL,
                 selectedImageURI = selectedBgUri,
@@ -817,11 +408,13 @@ fun ToolbarSection() {
                 selectedFontSize,
                 isBold,
                 isItalic,
+                isUnderLine,
                 selectedBackgroundColor,
                 contents,
                 onFontSizeChange = { selectedFontSize = it.sp },
                 onBoldChange = { isBold = it },
                 onItalicChange = { isItalic = it },
+                onUnderLineChange = {isUnderLine=it},
                 onTextChange = {
                     val index = findFirstTextIndex(contents)
                     // contents=contents+Content.Text(it)
@@ -843,32 +436,13 @@ fun ToolbarSection() {
                 barChartData = barChartData,
                 selectedBgUri,
                 setBgImage,
-                onSetBgImage = { setBgImage = it },
-//                dictionaryPath = dictionaryPath
+                onSetBgImage = { setBgImage = it }
             )
         }
 
 
     }
 
-}
-fun copyHunspellDictionaries(context: Context) {
-    val assetManager = context.assets
-    val files = listOf("en_US.aff", "en_US.dic")
-//    val files = listOf("hunspell/en_US.aff", "hunspell/en_US.dic")
-    val destDir = File(context.filesDir, "hunspell")
-    if (!destDir.exists()) {
-        destDir.mkdirs()
-    }
-
-    for (file in files) {
-        val inputStream = assetManager.open(file)
-        val outFile = File(destDir, file.split("/").last())
-        val outputStream = FileOutputStream(outFile)
-        inputStream.copyTo(outputStream)
-        inputStream.close()
-        outputStream.close()
-    }
 }
 
 
@@ -986,19 +560,22 @@ fun loadFromSharedPreferences(context: Context, key: String): String? {
     return sharedPreferences.getString(key, null)
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EditorScreen1(
+fun EditorScreen(
     selectedColor: Color,
     selectedFont: String,
     selectedFontSize: TextUnit,
     isBold: Boolean,
     isItalic: Boolean,
+    isUnderline: Boolean,
     selectedBackgroundColor: Color,
     contents: List<Content>,
     onFontSizeChange: (Float) -> Unit,
     onBoldChange: (Boolean) -> Unit,
     onItalicChange: (Boolean) -> Unit,
+    onUnderLineChange: (Boolean) -> Unit,
     onTextChange: (String) -> Unit,
     onImageSelectURL: (Int) -> Unit,
     selectedImageURL: Int,
@@ -1009,49 +586,42 @@ fun EditorScreen1(
     barChartData: BarChartData? = null,
     selectedImageUri: Uri?,
     setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit,
+    onSetBgImage: (Boolean) -> Unit
 ) {
-    var textInput by remember { mutableStateOf("Type here...") }
-    var fontSize by remember { mutableStateOf(10.sp) }
-    var isBold1 by remember { mutableStateOf(false) }
-    var isItalic1 by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
+
+    var isMissSpelled by remember { mutableStateOf(false) }
     var misspelledWords by remember { mutableStateOf(listOf<String>()) }
+    var suggestions by remember { mutableStateOf(listOf<String>()) }
+    // State for dropdown menu
+    var isMenuOpen by remember { mutableStateOf(false) }
+    var selectedWord by remember { mutableStateOf("") }
+    val cont = LocalContext.current
+    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
+    var dictionary by remember {
+        // Initialize the dictionary in a coroutine to load asynchronously
+        mutableStateOf(setOf<String>()) // Initial empty list
+    }
+
+    LaunchedEffect(Unit) {
+        // Load the dictionary asynchronously when the component launches
+        val loadedDictionary = loadDictionary(cont)
+        dictionary = loadedDictionary
+    }
+    val scope = rememberCoroutineScope()
+    var lastWord = ""
 
     val isKeyboardVisible = remember { mutableStateOf(false) }
-
+    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
 
     KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
         isKeyboardVisible.value = isVisible
     })
-    // Initialize the spell checker session
-    val cont = LocalContext.current
-//    val dictionary = remember { loadDictionary(cont) }
-//    Log.d("isKeyboardVisibleU", "$dictionary")
-    val spellCheckerSession = remember {
-        val textServicesManager = cont.getSystemService(TextServicesManager::class.java)
-        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
-            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
-                val newMisspelledWords = mutableListOf<String>()
-                for (result in results) {
-                    if (result.suggestionsCount > 0) {
-                        newMisspelledWords.add(result.getSuggestionAt(0))
-                    }
-                }
-                misspelledWords = newMisspelledWords
-            }
 
-            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {}
-        }, true)
-    }
-// Remember the scroll state
-    val scrollState = rememberScrollState()
 
 
     val fontInt = getFontListFromAssets().get(selectedFont)
 
     var backgroundcolor = selectedBackgroundColor
-
 
     Box(
         modifier = Modifier
@@ -1072,14 +642,33 @@ fun EditorScreen1(
         } else if (selectedImageURL == 3) {
             // onSetBgImage(true)
 
+
             if (setBgImage) {
                 backgroundcolor = Color.Transparent
-                Image(
-                    painter = rememberAsyncImagePainter(selectedImageUri),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop, // Scale the image to fill the Box
-                    modifier = Modifier.fillMaxSize()
-                )
+                val context = LocalContext.current
+               // val bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
+
+                var bitmap= base64ToBitmap(selectedImageUri.toString(),context)
+                Log.i("DesignActivity", "setBgImage $bitmap")
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }else{
+                     bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
+                    Log.i("DesignActivity", "setBgImage after null $bitmap")
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
                 //  onImageSelectURL=0
             }
 
@@ -1122,14 +711,110 @@ fun EditorScreen1(
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Column(modifier = Modifier.fillMaxSize()) {
+                // Display text contents in a Column
+
+
+                // Display image contents in a LazyVerticalGrid
+                 LazyVerticalGrid(
+                     columns = GridCells.Adaptive(minSize = 100.dp),
+                     modifier = Modifier.fillMaxWidth()
+                 ) {
+                     items(contents.filterIsInstance<Content.Image>()) { content ->
+                          val context = LocalContext.current
+                         // val bitmap= selectedImageUri?.let { loadBitmapFromUri(context =context , it) }
+                         var bitmap= base64ToBitmap(content.uri.toString(),context)
+                        // Log.i("DesignActivity", "setlistImage $bitmap")
+                         if (bitmap != null) {
+                             Image(
+                                 bitmap = bitmap!!.asImageBitmap(),
+                                 contentDescription = null,
+                                 contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .height(200.dp)
+                                     .padding(2.dp)
+                             )
+                         }else{
+                             bitmap= content.uri?.let { loadBitmapFromUri(context =context , it) }
+                            // Log.i("DesignActivity", "setBgImage after null $bitmap")
+                             if (bitmap != null) {
+                                 Image(
+                                     bitmap = bitmap!!.asImageBitmap(),
+                                     contentDescription = null,
+                                     contentScale = ContentScale.Crop, // Scale the image to fill the Box
+                                     modifier = Modifier
+                                         .fillMaxWidth()
+                                         .height(200.dp)
+                                         .padding(2.dp)
+                                 )
+                             }
+                         }
+
+                     }
+
+
+                     items(contents.filterIsInstance<Content.Audio>()) { content ->
+                         Column(
+                             horizontalAlignment = Alignment.CenterHorizontally,
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .padding(bottom = 8.dp)
+                         ) {
+                             Image(
+                                 painter = painterResource(id = R.drawable.music_file),
+                                 contentDescription = "Audio",
+                                 modifier = Modifier
+                                     .size(100.dp)
+                                     .padding(bottom = 4.dp)
+                             )
+                             val context = LocalContext.current
+                             Text(
+                                 text = getFileNameFromUri(context, content.uri),
+                                 textAlign = TextAlign.Center,
+                                 style = TextStyle(fontSize = 14.sp)
+                             )
+                         }
+                     }
+
+
+                     items(contents.filterIsInstance<Content.Video>()) { content ->
+                         Column(
+                             horizontalAlignment = Alignment.CenterHorizontally,
+                             modifier = Modifier
+                                 .fillMaxWidth()
+                                 .padding(bottom = 8.dp)
+                         ) {
+                             Image(
+                                 painter = painterResource(id = R.drawable.video_file),
+                                 contentDescription = "Video",
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .height(100.dp)
+                                     .padding(bottom = 4.dp)
+                             )
+                             val context = LocalContext.current
+                                 Text(
+                                     text = getFileNameFromUri(context, content.uri),
+                                     textAlign = TextAlign.Center,
+                                     style = TextStyle(fontSize = 14.sp)
+                                 )
+
+                         }
+                     }
+
+
+
+
+                 }
                 // Display image, audio, and video contents in a LazyVerticalGrid
-                LazyVerticalGrid(
+                /*LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 100.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     items(contents) { content ->
                         when (content) {
                             is Content.Image -> {
+                                Log.i("DesignActivity","LazyVerticalGrid 1")
                                 Image(
                                     painter = rememberAsyncImagePainter(model = content.uri),
                                     contentDescription = null,
@@ -1190,35 +875,21 @@ fun EditorScreen1(
                             else -> {}
                         }
                     }
-                }
+                }*/
 
                 //display bar-chart
                 barChartData?.let { data ->
                     Log.d("Barchartdatwa", "$data ---dataPoints")
                     BarChart(data.labels, data.dataPoints)
                 }
-
-                /*val annotatedText = buildAnnotatedString {
-                    val words = textInput.split(" ")
-                    words.forEach { word ->
-                        if (word in misspelledWords) {
-                            withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
-                                append("$word ")
-                            }
-                        } else {
-                            append("$word ")
-                        }
-                    }
-                }*/
-
-                if (isKeyboardVisible.value) {
+               /* if (isKeyboardVisible.value) {
                     Row(
                         modifier = Modifier
                             .background(Color.LightGray)
                     ) {
                         IconButton(
-                            onClick = { isBold1 = !isBold1 },
-                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                            onClick = { onBoldChange(!isBold) },
+                            modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.baseline_format_bold_24),
@@ -1226,8 +897,8 @@ fun EditorScreen1(
                             )
                         }
                         IconButton(
-                            onClick = { isItalic1 = !isItalic1 },
-                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                            onClick = { onItalicChange(!isItalic) },
+                            modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)
                         ) {
                             Icon(
                                 painterResource(id = R.drawable.baseline_format_italic_24),
@@ -1235,7 +906,7 @@ fun EditorScreen1(
                             )
                         }
                         IconButton(
-                            onClick = { isUnderline = !isUnderline },
+                            onClick = { onUnderLineChange(!isUnderline) },
                             modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
                         ) {
                             Icon(
@@ -1244,578 +915,7 @@ fun EditorScreen1(
                             )
                         }
                     }
-                }
-                // Simulate spell checking when text input changes
-                LaunchedEffect(textInput) {
-                    spellCheckerSession?.getSuggestions(TextInfo(textInput), 5)
-                }
-
-                contents.filterIsInstance<Content.Text>().forEach { content ->
-                    isdata = true
-                    // textInput=content.text
-                    TextField(
-                        value = content.text,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor, // Change background color to white
-                            cursorColor = Color.Black // Change cursor color to black (optional)
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = selectedFontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            color = selectedColor,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Normal)
-                            )
-                        )
-                    )
-
-                }
-                // Text input field
-                if (!isdata) {
-                    TextField(
-                        value = textInput,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor, // Change background color to white
-                            cursorColor = Color.Black // Change cursor color to black (optional)
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(
-                                Font(fontInt!!, FontWeight.Normal)
-                            )
-                        )
-                    )
-                    if (misspelledWords.isNotEmpty()) {
-                        Log.d("misspelledWords",misspelledWords.toString())
-                        Column(modifier = Modifier.padding(top = 16.dp)) {
-                            Text("Misspelled Words:", color = Color.Red)
-                            misspelledWords.forEach { word ->
-                                Text(word, color = Color.Red)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EditorScreen2(
-    selectedColor: Color,
-    selectedFont: String,
-    selectedFontSize: TextUnit,
-    isBold: Boolean,
-    isItalic: Boolean,
-    selectedBackgroundColor: Color,
-    contents: List<Content>,
-    onFontSizeChange: (Float) -> Unit,
-    onBoldChange: (Boolean) -> Unit,
-    onItalicChange: (Boolean) -> Unit,
-    onTextChange: (String) -> Unit,
-    onImageSelectURL: (Int) -> Unit,
-    selectedImageURL: Int,
-    shouldShowDialog: Boolean,
-    onShowBackImageDialog: (Boolean) -> Unit,
-    openImagePicker: (Boolean) -> Unit,
-    imageList: List<Int>,
-    barChartData: BarChartData? = null,
-    selectedImageUri: Uri?,
-    setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit,
-) {
-    var textInput by remember { mutableStateOf("Type here...") }
-    var fontSize by remember { mutableStateOf(10.sp) }
-    var isBold1 by remember { mutableStateOf(false) }
-    var isItalic1 by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
-    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
-
-    val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
-
-    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
-        isKeyboardVisible.value = isVisible
-    })
-
-    val cont = LocalContext.current
-    // Initialize the spell checker session
-    val spellCheckerSession = remember {
-        val textServicesManager = cont.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as TextServicesManager
-        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
-            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
-                val newMisspelledWords = mutableListOf<String>()
-                for (result in results) {
-                    if (result.suggestionsCount > 0) {
-                        newMisspelledWords.add(result.getSuggestionAt(0))
-                    }
-                }
-                misspelledWords = newMisspelledWords
-                Log.d("SpellChecker", "Misspelled words: $misspelledWords")
-            }
-
-            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {
-                // Not implemented for this example
-            }
-        }, true)
-    }
-
-    val scrollState = rememberScrollState()
-    val fontInt = getFontListFromAssets().get(selectedFont)
-    var backgroundcolor = selectedBackgroundColor
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
-    ) {
-        if (selectedImageURL == 2) {
-            openImagePicker(true)
-            onImageSelectURL(3)
-        } else if (selectedImageURL == 3) {
-            if (setBgImage) {
-                backgroundcolor = Color.Transparent
-                Image(
-                    painter = rememberAsyncImagePainter(selectedImageUri),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        } else if (selectedImageURL > 1) {
-            backgroundcolor = Color.Transparent
-            Image(
-                painter = painterResource(id = selectedImageURL),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            backgroundcolor = selectedBackgroundColor
-        }
-
-        ImageListAlertDialog(
-            shouldShowDialog,
-            onDismiss = { onShowBackImageDialog(false) },
-            onImageSelectedUrl = { onImageSelectURL(it) },
-            pickfromGallery = { onSetBgImage(it) },
-            imageList
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundcolor)
-        ) {
-            Slider(
-                value = selectedFontSize.value,
-                onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents) { content ->
-                        when (content) {
-                            is Content.Image -> {
-                                Image(
-                                    painter = rememberAsyncImagePainter(model = content.uri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
-                            is Content.Audio -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.music_file),
-                                        contentDescription = "Audio",
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-                            is Content.Video -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.video_file),
-                                        contentDescription = "Video",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-                            else -> {}
-                        }
-                    }
-                }
-
-                barChartData?.let { data ->
-                    Log.d("Barchartdatwa", "$data ---dataPoints")
-                    BarChart(data.labels, data.dataPoints)
-                }
-
-                if (isKeyboardVisible.value) {
-                    Row(
-                        modifier = Modifier.background(Color.LightGray)
-                    ) {
-                        IconButton(
-                            onClick = { isBold1 = !isBold1 },
-                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_bold_24),
-                                contentDescription = "Bold"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isItalic1 = !isItalic1 },
-                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_italic_24),
-                                contentDescription = "Italic"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isUnderline = !isUnderline },
-                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_underlined_24),
-                                contentDescription = "Underline"
-                            )
-                        }
-                    }
-                }
-
-                LaunchedEffect(textInput) {
-                    spellCheckerSession?.getSuggestions(TextInfo(textInput), 5)
-                }
-
-                contents.filterIsInstance<Content.Text>().forEach { content ->
-                    TextField(
-                        value = content.text,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor,
-                            cursorColor = Color.Black
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = selectedFontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            color = selectedColor,
-                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
-                        )
-                    )
-                }
-
-                if (contents.isEmpty()) {
-                    BasicTextField(
-                        value = textInput,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
-                        },
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(0.5.dp, Color.White),
-                        textStyle = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
-                        ),
-                        decorationBox = { innerTextField ->
-                            val annotatedText = buildAnnotatedString {
-                                val words = textInput.split(" ")
-                                words.forEach { word ->
-                                    if (word in misspelledWords) {
-                                        withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
-                                            append("$word ")
-                                        }
-                                    } else {
-                                        append("$word ")
-                                    }
-                                }
-                            }
-                            Text(
-                                text = annotatedText,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            innerTextField()
-                        }
-                    )
-
-                    if (misspelledWords.isNotEmpty()) {
-                        Log.d("misspelledWords", misspelledWords.toString())
-                        Column(modifier = Modifier.padding(top = 16.dp)) {
-                            Text("Misspelled Words:", color = Color.Red)
-                            misspelledWords.forEach { word ->
-                                Text(word, color = Color.Red)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EditorScreen(
-    selectedColor: Color,
-    selectedFont: String,
-    selectedFontSize: TextUnit,
-    isBold: Boolean,
-    isItalic: Boolean,
-    selectedBackgroundColor: Color,
-    contents: List<Content>,
-    onFontSizeChange: (Float) -> Unit,
-    onBoldChange: (Boolean) -> Unit,
-    onItalicChange: (Boolean) -> Unit,
-    onTextChange: (String) -> Unit,
-    onImageSelectURL: (Int) -> Unit,
-    selectedImageURL: Int,
-    shouldShowDialog: Boolean,
-    onShowBackImageDialog: (Boolean) -> Unit,
-    openImagePicker: (Boolean) -> Unit,
-    imageList: List<Int>,
-    barChartData: BarChartData? = null,
-    selectedImageUri: Uri?,
-    setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit,
-) {
-    var textInput by remember { mutableStateOf("Zukor ") }
-    var fontSize by remember { mutableStateOf(10.sp) }
-    var isBold1 by remember { mutableStateOf(false) }
-    var isItalic1 by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
-    var isMissSpelled by remember { mutableStateOf(false) }
-    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
-    var suggestions by remember { mutableStateOf(listOf<String>()) }
-    // State for dropdown menu
-    var isMenuOpen by remember { mutableStateOf(false) }
-    var selectedWord by remember { mutableStateOf("") }
-
-    val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
-
-    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
-        isKeyboardVisible.value = isVisible
-    })
-
-    val cont = LocalContext.current
-    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
-    var dictionary by remember {
-        // Initialize the dictionary in a coroutine to load asynchronously
-        mutableStateOf(setOf<String>()) // Initial empty list
-    }
-
-    LaunchedEffect(Unit) {
-        // Load the dictionary asynchronously when the component launches
-        val loadedDictionary = loadDictionary(cont)
-        dictionary = loadedDictionary
-    }
-
-    Log.d("isKeyboardVisibleUD", "$dictionary")
-
-    // Remember the scroll state
-    val scrollState = rememberScrollState()
-    val fontInt = getFontListFromAssets().get(selectedFont)
-    var backgroundcolor = selectedBackgroundColor
-    val scope = rememberCoroutineScope()
-    var lastWord = ""
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
-    ) {
-        if (selectedImageURL == 2) {
-            openImagePicker(true)
-            onImageSelectURL(3)
-        } else if (selectedImageURL == 3 && setBgImage) {
-            backgroundcolor = Color.Transparent
-            Image(
-                painter = rememberAsyncImagePainter(selectedImageUri),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (selectedImageURL > 1) {
-            backgroundcolor = Color.Transparent
-            Image(
-                painter = painterResource(id = selectedImageURL),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            backgroundcolor = selectedBackgroundColor
-        }
-
-        ImageListAlertDialog(
-            shouldShowDialog,
-            onDismiss = { onShowBackImageDialog(false) },
-            onImageSelectedUrl = { onImageSelectURL(it) },
-            pickfromGallery = { onSetBgImage(it) },
-            imageList
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundcolor)
-        ) {
-            var isdata = false
-
-            Slider(
-                value = selectedFontSize.value,
-                onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents) { content ->
-                        when (content) {
-                            is Content.Image -> {
-                                Image(
-                                    painter = rememberAsyncImagePainter(model = content.uri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
-
-                            is Content.Audio -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.music_file),
-                                        contentDescription = "Audio",
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            is Content.Video -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.video_file),
-                                        contentDescription = "Video",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
-                }
-
-                barChartData?.let { data ->
-                    Log.d("Barchartdatwa", "$data ---dataPoints")
-                    BarChart(data.labels, data.dataPoints)
-                }
+                }*/
 
                 if (isKeyboardVisible.value) {
                     Row(
@@ -1823,11 +923,12 @@ fun EditorScreen(
 
                     ) {
                         Row(
-                            modifier = Modifier.background(Color.LightGray)
+                            modifier = Modifier
+                                .background(Color.LightGray)
                         ) {
                             IconButton(
-                                onClick = { isBold1 = !isBold1 },
-                                modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
+                                onClick = { onBoldChange(!isBold) },
+                                modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)
                             ) {
                                 Icon(
                                     painterResource(id = R.drawable.baseline_format_bold_24),
@@ -1835,8 +936,8 @@ fun EditorScreen(
                                 )
                             }
                             IconButton(
-                                onClick = { isItalic1 = !isItalic1 },
-                                modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
+                                onClick = { onItalicChange(!isItalic) },
+                                modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)
                             ) {
                                 Icon(
                                     painterResource(id = R.drawable.baseline_format_italic_24),
@@ -1844,7 +945,7 @@ fun EditorScreen(
                                 )
                             }
                             IconButton(
-                                onClick = { isUnderline = !isUnderline },
+                                onClick = { onUnderLineChange(!isUnderline) },
                                 modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
                             ) {
                                 Icon(
@@ -1852,95 +953,61 @@ fun EditorScreen(
                                     contentDescription = "Underline"
                                 )
                             }
-
                         }
                         Spacer(modifier = Modifier.padding(start = 10.dp))
                         if (isMissSpelled) {
-                        Row {
-                            IconButton(
-                                onClick = {
+                            Row {
+                                IconButton(
+                                    onClick = {
 //                                    suggestions = getSuggestions(misspelledWord)
-                                    isMenuOpen = true
-                                },
-                                modifier = Modifier
-                                    .background(Color.Red)
+                                        isMenuOpen = true
+                                    },
+                                    modifier = Modifier
+                                        .background(Color.Red)
 
-                            ) {
-                                Icon(
-                                    painterResource(id = R.drawable.baseline_error_24),
-                                    contentDescription = "Underline",
-                                )
-                            }
-                        }
-                    }
-                }
-
-                }
-
-
-
-                val newMisspelledWords = mutableListOf<String>()
-                val annotatedText = buildAnnotatedString {
-                    var words = textInput.lowercase(Locale.ROOT).split(" ")
-                    contents.filterIsInstance<Content.Text>().forEach{
-                        words =  it.text.lowercase(Locale.ROOT).split(" ")
-                    }
-
-                    words.forEach { word ->
-                        if (word in dictionary) {
-                            append("$word ")
-                            Log.d("IFBLOCKIF", "Text input: $word")
-                        } else {
-                            withStyle(style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline)) {
-                                append("$word ")
-                                newMisspelledWords.add(word)
-                                misspelledWords= newMisspelledWords
-                                val nonEmptyWords = newMisspelledWords.filter { it.isNotEmpty() }
-                                    .toSet()
-                                (misspelledWords as MutableList<String>).addAll(nonEmptyWords)
-                                if (misspelledWords[0] != "") {
-//                                    isMissSpelled = true
-                                    Log.d("IFBLOCKIF112", "rlsr 1212input: -- $misspelledWords")
+                                ) {
+                                    Icon(
+                                        painterResource(id = R.drawable.baseline_error_24),
+                                        contentDescription = "Underline",
+                                    )
                                 }
                             }
                         }
                     }
+
                 }
 
-                var txt = annotatedText.text
-                Log.d("misspelledWords121", "annoted "+ misspelledWords)
-                contents.filterIsInstance<Content.Text>().forEach { content ->
 
+
+                contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
+                    // textInput=content.text
                     TextField(
                         value = content.text,
                         onValueChange = {
-                            txt = it
+                          //  textInput = it
                             onTextChange(it)
-                            if (!it.isEmpty()) {
-//                                spellCheckerSession?.getSuggestions(TextInfo(it), 5)
-                                Log.d("TextField", "Text input: $it")
-                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .fillMaxHeight()
                             .border(0.5.dp, Color.White),
                         colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor,
-                            cursorColor = Color.Black
+                            containerColor = backgroundcolor, // Change background color to white
+                            cursorColor = Color.Black // Change cursor color to black (optional)
                         ),
                         textStyle = TextStyle(
                             fontSize = selectedFontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
+                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                            fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
                             textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
                             color = selectedColor,
-                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                            fontFamily = FontFamily(
+                                Font(fontInt!!, FontWeight.Normal)
+                            )
                         )
-
                     )
-                    scope.cancel()
+
                     scope.launch {
                         delay(3 * 1000L) // 1 second delay
                         lastWord = content.text.split(" ").lastOrNull() ?: ""
@@ -1949,47 +1016,12 @@ fun EditorScreen(
                         Log.d("TextFieldisMissSpelled", "Text input:, isMissSpelled: $isMissSpelled")
                         Log.d("isdatais ",lastWord)
                     }
+
                 }
 
-//                 lastWord = textInput.split(" ").lastOrNull() ?: ""
-
-
-                if (!isdata) {
-                    TextField(
-                        value = txt,
-                        onValueChange = {
-                            textInput = it
-                            onTextChange(it)
-//                            spellCheckerSession?.getSuggestions(TextInfo(it), 5)
-                            Log.d("TextField", "Text input: $it")
-                        },
-
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .border(0.5.dp, Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = backgroundcolor,
-                            cursorColor = Color.Black
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = fontSize,
-                            fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                            fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                            textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
-                            color = selectedColor,
-                            fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal)),
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text, // Specify the keyboard type here
-                            imeAction = ImeAction.Done // Optional: Define action button on keyboard
-                        )
-                    )
-                }
             }
-
         }
     }
-    // Dropdown menu
     DropdownMenu(
         expanded = isMenuOpen,
         onDismissRequest = { isMenuOpen = false },
@@ -2002,7 +1034,7 @@ fun EditorScreen(
                     text = { Text(suggestion) },
                     onClick = {
                         selectedWord = suggestion
-                        textInput = textInput.replace(selectedWord, suggestion, true)
+//                        textInput = textInput.replace(selectedWord, suggestion, true)
                         isMenuOpen = false
                     }
                 )
@@ -2010,10 +1042,21 @@ fun EditorScreen(
         }else isMenuOpen = false
     }
 }
-
-
-fun showMenu() {
-
+suspend fun loadDictionary(context: Context): Set<String> {
+    return withContext(Dispatchers.IO) {
+        val words = mutableSetOf<String>()
+        context.assets.open("en_US.dic").use { inputStream ->
+            BufferedReader(InputStreamReader(inputStream)).useLines { lines ->
+                lines.forEach { line ->
+                    val word = line.trim().removeSuffix("/").substringBefore("/").toLowerCase()
+                    if (word.isNotEmpty()) {
+                        words.add(word)
+                    }
+                }
+            }
+        }
+        return@withContext words
+    }
 }
 fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
     val suggestions = mutableListOf<String>()
@@ -2032,331 +1075,49 @@ fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
 
     return suggestions
 }
+fun getBitmapFromUri(context: Context,uri: Uri):Bitmap? {
 
+        val contentResolver = context.contentResolver
+        var inputStream: InputStream? = null
+        var bitmap: Bitmap? = null
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EditorScreen11(
-    selectedColor: Color,
-    selectedFont: String,
-    selectedFontSize: TextUnit,
-    isBold: Boolean,
-    isItalic: Boolean,
-    selectedBackgroundColor: Color,
-    contents: List<Content>,
-    onFontSizeChange: (Float) -> Unit,
-    onBoldChange: (Boolean) -> Unit,
-    onItalicChange: (Boolean) -> Unit,
-    onTextChange: (String) -> Unit,
-    onImageSelectURL: (Int) -> Unit,
-    selectedImageURL: Int,
-    shouldShowDialog: Boolean,
-    onShowBackImageDialog: (Boolean) -> Unit,
-    openImagePicker: (Boolean) -> Unit,
-    imageList: List<Int>,
-    barChartData: BarChartData? = null,
-    selectedImageUri: Uri?,
-    setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit,
-) {
-    var textInput by remember { mutableStateOf("Zukor ") }
-    var fontSize by remember { mutableStateOf(10.sp) }
-    var isBold1 by remember { mutableStateOf(false) }
-    var isItalic1 by remember { mutableStateOf(false) }
-    var isUnderline by remember { mutableStateOf(false) }
-    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
-
-    val isKeyboardVisible = remember { mutableStateOf(false) }
-    Log.d("isKeyboardVisibleU", isKeyboardVisible.toString())
-
-    KeyboardVisibilityDetector(onKeyboardVisibilityChanged = { isVisible ->
-        isKeyboardVisible.value = isVisible
-    })
-
-    // Initialize the spell checker session
-    val cont = LocalContext.current
-    // Use remember for the dictionary to ensure it's loaded once and retained across recompositions
-    var dictionary by remember {
-        // Initialize the dictionary in a coroutine to load asynchronously
-        mutableStateOf(setOf<String>()) // Initial empty list
-    }
-
-    LaunchedEffect(Unit) {
-        // Load the dictionary asynchronously when the component launches
-        val loadedDictionary = loadDictionary(cont)
-        dictionary = loadedDictionary
-    }
-
-    val spellCheckerSession = remember {
-        val textServicesManager = cont.getSystemService(Context.TEXT_SERVICES_MANAGER_SERVICE) as TextServicesManager
-        textServicesManager.newSpellCheckerSession(null, null, object : SpellCheckerSession.SpellCheckerSessionListener {
-            override fun onGetSuggestions(results: Array<SuggestionsInfo>) {
-                val newMisspelledWords = mutableListOf<String>()
-                for (result in results) {
-                    val wordId = result.suggestionsAttributes and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY.inv()
-                    val originalWord = textInput.split(" ")[wordId]
-                    if (result.suggestionsCount > 0) {
-                        newMisspelledWords.add(originalWord)
-                    }
-                }
-                misspelledWords = newMisspelledWords
-                Log.d("SpellChecker", "Misspelled words: $misspelledWords")
-            }
-
-            override fun onGetSentenceSuggestions(results: Array<SentenceSuggestionsInfo>) {
-                // Not implemented for this example
-            }
-        }, true)
-    }
-
-    // Remember the scroll state
-    val scrollState = rememberScrollState()
-    val fontInt = getFontListFromAssets().get(selectedFont)
-    var backgroundcolor = selectedBackgroundColor
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 50.dp, start = 0.dp, end = 0.dp, bottom = 0.dp)
-    ) {
-        if (selectedImageURL == 2) {
-            openImagePicker(true)
-            onImageSelectURL(3)
-        } else if (selectedImageURL == 3 && setBgImage) {
-            backgroundcolor = Color.Transparent
-            Image(
-                painter = rememberAsyncImagePainter(selectedImageUri),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else if (selectedImageURL > 1) {
-            backgroundcolor = Color.Transparent
-            Image(
-                painter = painterResource(id = selectedImageURL),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            backgroundcolor = selectedBackgroundColor
+        try {
+            inputStream = contentResolver.openInputStream(uri)
+            bitmap = BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            // Handle exceptions, e.g., file not found
+            e.printStackTrace()
+        } finally {
+            inputStream?.close()
         }
 
-        ImageListAlertDialog(
-            shouldShowDialog,
-            onDismiss = { onShowBackImageDialog(false) },
-            onImageSelectedUrl = { onImageSelectURL(it) },
-            pickfromGallery = { onSetBgImage(it) },
-            imageList
-        )
+        return bitmap
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundcolor)
-        ) {
-            var isdata = false
-
-            Slider(
-                value = selectedFontSize.value,
-                onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents) { content ->
-                        when (content) {
-                            is Content.Image -> {
-                                Image(
-                                    painter = rememberAsyncImagePainter(model = content.uri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
-
-                            is Content.Audio -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.music_file),
-                                        contentDescription = "Audio",
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            is Content.Video -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.video_file),
-                                        contentDescription = "Video",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
-                }
-
-                barChartData?.let { data ->
-                    Log.d("Barchartdatwa", "$data ---dataPoints")
-                    BarChart(data.labels, data.dataPoints)
-                }
-
-                if (isKeyboardVisible.value) {
-                    Row(
-                        modifier = Modifier.background(Color.LightGray)
-                    ) {
-                        IconButton(
-                            onClick = { isBold1 = !isBold1 },
-                            modifier = Modifier.background(if (isBold1) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_bold_24),
-                                contentDescription = "Bold"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isItalic1 = !isItalic1 },
-                            modifier = Modifier.background(if (isItalic1) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_italic_24),
-                                contentDescription = "Italic"
-                            )
-                        }
-                        IconButton(
-                            onClick = { isUnderline = !isUnderline },
-                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_underlined_24),
-                                contentDescription = "Underline"
-                            )
-                        }
-                    }
-                }
-
-                TextField(
-                    value = textInput,
-                    onValueChange = {
-                        textInput = it
-                        onTextChange(it)
-                        spellCheckerSession?.getSuggestions(TextInfo(it), 5)
-                        Log.d("TextField", "Text input: $it")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .border(0.5.dp, Color.White),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = backgroundcolor,
-                        cursorColor = Color.Black
-                    ),
-                    textStyle = TextStyle(
-                        fontSize = selectedFontSize,
-                        fontWeight = if (isBold1) FontWeight.Bold else FontWeight.Normal,
-                        fontStyle = if (isItalic1) FontStyle.Italic else FontStyle.Normal,
-                        textDecoration = if (isUnderline) {
-                            TextDecoration.Underline
-                        } else TextDecoration.None,
-                        color = selectedColor,
-                        fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
-                    ),
-                    visualTransformation = VisualTransformation { text ->
-                        val builder = AnnotatedString.Builder(text)
-                        misspelledWords.forEach { word ->
-                            val startIndex = text.indexOf(word)
-                            if (startIndex != -1) {
-                                builder.addStyle(
-                                    style = SpanStyle(color = Color.Red, textDecoration = TextDecoration.Underline),
-                                    start = startIndex,
-                                    end = startIndex + word.length
-                                )
-                            }
-                        }
-                        TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
-                    }
-                )
-
-                if (misspelledWords.isNotEmpty()) {
-                    Log.d("misspelledWords121", misspelledWords.toString())
-                    Column(modifier = Modifier.padding(top = 16.dp)) {
-                        Text("Misspelled Words:", color = Color.Red)
-                        misspelledWords.forEach { word ->
-                            Text(word, color = Color.Red)
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 
-
-suspend fun loadDictionary(context: Context): Set<String> {
-    return withContext(Dispatchers.IO) {
-        val words = mutableSetOf<String>()
-        context.assets.open("en_US.dic").use { inputStream ->
-            BufferedReader(InputStreamReader(inputStream)).useLines { lines ->
-                lines.forEach { line ->
-                    val word = line.trim().removeSuffix("/").substringBefore("/").toLowerCase()
-                    if (word.isNotEmpty()) {
-                        words.add(word)
-                    }
-                }
-            }
-        }
-        return@withContext words
-    }
+fun bitmapToBase64(bitmap: Bitmap): String {
+    val byteArrayOutputStream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+    val byteArray = byteArrayOutputStream.toByteArray()
+    return Base64.encodeToString(byteArray, Base64.DEFAULT)
 }
 
-fun checkSpelling(text: String, hunspell: Hunspell): List<String> {
-    val misspelledWords = mutableListOf<String>()
-    val words = text.split(" ")
-    words.forEach { word ->
-        if (!hunspell.spell(word)) {
-            misspelledWords.add(word)
+
+fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
+    return try {
+        val byteArray = Base64.decode(base64String, Base64.DEFAULT)
+        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        try {
+            val inputStream = context.contentResolver.openInputStream(base64String.toUri())
+            BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
-    return misspelledWords
 }
 
 @Composable
@@ -2386,24 +1147,42 @@ fun KeyboardVisibilityDetector(
 }
 
 fun getFileNameFromUri(context: Context, uri: Uri): String {
-    val cursor = context.contentResolver.query(uri, null, null, null, null)
-    val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-    cursor?.moveToFirst()
-    val fileName = cursor?.getString(nameIndex ?: 0) ?: ""
-    cursor?.close()
+    var fileName=uri.toString()
+    try{
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        val nameIndex = cursor?.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        cursor?.moveToFirst()
+         fileName = cursor?.getString(nameIndex ?: 0) ?: ""
+        cursor?.close()
+    }catch (e:Exception){
+        e.printStackTrace()
+        if (fileName.contains("video")) {
+            fileName = extractTextAfterVideo(fileName, "/video")
+        }else {
+            fileName = extractTextAfterVideo(fileName, "/audio")
+        }
+    }
+
     return fileName
 }
 
-fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
-    val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
-    return FontFamily(typeface)
+
+fun extractTextAfterVideo(uri: String,from:String): String {
+    return uri.substringAfter(from)
 }
 
-@Composable
-fun LoadImageFromStorage(filePath: String): Painter {
-    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
-    return imagePainter
+
+fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
+    return try {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        BitmapFactory.decodeStream(inputStream)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
 }
+
+
 
 @Composable
 fun BottomMenuColumn(
@@ -2426,12 +1205,17 @@ fun BottomMenuColumn(
     selectedFontSize: Float,
     isBold: Boolean,
     isItalic: Boolean,
+    isUnderline: Boolean,
     onBarChartDataChange: (BarChartData) -> Unit,
     onTextChange: (String) -> Unit,
+    onImageChange:(Uri)->Unit,
+    onVideoChange:(Uri)->Unit,
+    onAudioChange:(Uri)->Unit,
     onFontColorChange: (Color) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onBoldChange: (Boolean) -> Unit,
     onItalicChange: (Boolean) -> Unit,
+    onUnderLineChange: (Boolean) -> Unit,
     onImageSelectURL: (Int) -> Unit,
     selectedImageURL: Int,
     selectedImageURI: Uri?,
@@ -2554,9 +1338,16 @@ fun BottomMenuColumn(
                     } else if (item.title.equals("File")) {
                         filePickerLauncher.launch(arrayOf("audio/*", "video/*"))
                     } else if (item.title.equals("Save")) {
-                        Log.i("DesignActivity", "save $selectedImageURI")
+                        /*val uri = sampleBitmap?.let {
+                           saveImageToGallery(context,
+                               it, "sample_image")
+                       }*/
+
+
                         val editorContent = EditorContent(
                             texts = contents.filterIsInstance<Content.Text>().map {
+                                val sampleBitmap = selectedImageURI?.let { getBitmapFromUri(context, it) }
+                                val uri= sampleBitmap?.let { bitmapToBase64(it) }
                                 TextContent(
                                     text = it.text,
                                     color = selectedFontcolor,
@@ -2565,18 +1356,34 @@ fun BottomMenuColumn(
                                     isItalic = isItalic,
                                     fontFamily = selectedFontFamily,
                                     selectedImageURL = selectedImageURL,
-                                    selectedImageURI = selectedImageURI.toString()
+                                    selectedImageURI = uri.toString(),
+                                    isUnderline=isUnderline
                                 )
                             },
                             images = contents.filterIsInstance<Content.Image>().map {
+                                val sampleBitmap = it.uri?.let { getBitmapFromUri(context, it) }
+                                val uri= sampleBitmap?.let { bitmapToBase64(it) }
+                                ImageContent(uri = uri.toString())
+                            },
+                            audios = contents.filterIsInstance<Content.Audio>().map {
+                                ImageContent(uri = it.uri.toString())
+                            },
+                            videos = contents.filterIsInstance<Content.Video>().map {
                                 ImageContent(uri = it.uri.toString())
                             },
                             chartData = barChartData?.let {
-                                ChartData(it.labels, it.dataPoints)
+                                BarChartData(it.labels, it.dataPoints)
                             }
                         )
 
+
+
+
+
+
                         val serializedData = serializeEditorContent(editorContent)
+
+                       // Log.i("DesignActivity", "save $serializedData")
 
                         saveToSharedPreferences(context = context, "editorContent", serializedData)
 
@@ -2586,25 +1393,47 @@ fun BottomMenuColumn(
                             val editorContent = deserializeEditorContent(it)
 
                             editorContent?.let {
+                                for(imageitem in it.images){
+                                    onImageChange(Uri.parse(imageitem.uri))
+                                }
+
+                                for (videoitem in it.videos){
+                                    onVideoChange(Uri.parse(videoitem.uri))
+                                }
+
+
+                                for (audioitem in it.audios){
+                                    onAudioChange(Uri.parse(audioitem.uri))
+                                }
+
+
+
 
                                 onTextChange(
                                     it.texts.get(0).text
                                 )
                                 //  imagePickerLauncher.launch("image/*")
                                 onFontSizeChange(it.texts.get(0).fontSize)
+                                onBoldChange(it.texts.get(0).isBold)
+                                onItalicChange(it.texts.get(0).isItalic)
                                 onFontChange(it.texts.get(0).fontFamily)
+                                onUnderLineChange(it.texts.get(0).isUnderline)
                                 onFontColorChange(it.texts.get(0).color)
                                 onImageSelectURL(it.texts.get(0).selectedImageURL)
                                 onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
+
                                 if (it.texts.get(0).selectedImageURI != null) {
                                     onSetBgImage(true)
                                 }
 
 
-                                Log.i(
+                                it.chartData?.let { it1 -> onBarChartDataChange(it1) }
+                               // showDialog = false
+
+                               /* Log.i(
                                     "DesignActivity",
                                     "editorContent $editorContent ${contents.size}"
-                                )
+                                )*/
 
                                 // Set other properties like barChartData, etc.
                             }
@@ -2856,7 +1685,7 @@ fun ImageListAlertDialog(
 
     if (shouldShowDialog) {
         AlertDialog(
-            onDismissRequest = { /*shouldShowDialog = false*/ },
+            onDismissRequest = { /*shouldShowDialog = false*/  },
             title = { Text(text = "Choose background") },
             text = {
 
@@ -2912,6 +1741,9 @@ fun ImageListAlertDialog(
 }
 
 
+
+
+
 @Composable
 fun ItemCard(item: BottomMenuContent) {
     Row(
@@ -2944,4 +1776,38 @@ fun ItemList(items: List<BottomMenuContent>) {
     }
 }
 
+fun saveImageToGallery(context: Context, bitmap: Bitmap, displayName: String): Uri? {
+    val resolver = context.contentResolver
+    val contentValues = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyAppImages")
+        }
+    }
 
+    val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+    imageUri?.let {
+        val outputStream: OutputStream? = resolver.openOutputStream(it)
+        outputStream?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+        }
+    }
+    return imageUri
+}
+
+fun loadImageFromUri(context: Context, uri: Uri): Bitmap? {
+    val inputStream = context.contentResolver.openInputStream(uri)
+    return BitmapFactory.decodeStream(inputStream)
+}
+
+fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
+    val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
+    return FontFamily(typeface)
+}
+
+@Composable
+fun LoadImageFromStorage(filePath: String): Painter {
+    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
+    return imagePainter
+}
