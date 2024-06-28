@@ -1378,8 +1378,7 @@ fun EditorScreen(
 
                     ) {
                         Row(
-                            modifier = Modifier
-                                .background(Color.LightGray)
+                            modifier = Modifier.background(Color.LightGray)
                         ) {
                             IconButton(
                                 onClick = { onBoldChange(!isBold) },
@@ -1462,7 +1461,6 @@ fun EditorScreen(
                             )
                         )
                     )
-
                     scope.launch {
                         delay(3 * 1000L) // 1 second delay
                         lastWord = content.text.split(" ").lastOrNull() ?: ""
@@ -1560,12 +1558,12 @@ fun bitmapToBase64(bitmap: Bitmap): String {
 
 
 fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
-    return try {
+    try {
         val byteArray = Base64.decode(base64String, Base64.DEFAULT)
-        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
     } catch (e: Exception) {
         e.printStackTrace()
-        try {
+        return try {
             val inputStream = context.contentResolver.openInputStream(base64String.toUri())
             BitmapFactory.decodeStream(inputStream)
         } catch (e: Exception) {
