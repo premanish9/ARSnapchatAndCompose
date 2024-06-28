@@ -2,8 +2,6 @@ package com.example.arsnapchat
 
 
 import android.app.Activity
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -20,9 +18,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Base64
 import android.util.Log
-import android.view.View
 import android.view.ViewTreeObserver
-import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -38,12 +34,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,14 +44,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -74,6 +65,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextFieldDefaults.textFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,7 +80,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -97,11 +88,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
@@ -114,8 +108,6 @@ import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
-import com.example.arsnapchat.model.ChartData
-import com.example.arsnapchat.model.Course
 import com.example.arsnapchat.model.EditorContent
 import com.example.arsnapchat.model.ImageContent
 import com.example.arsnapchat.model.TextContent
@@ -136,7 +128,6 @@ import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
-import kotlin.math.abs
 
 
 class DesignActivity : ComponentActivity() {
@@ -253,6 +244,9 @@ fun ToolbarSection() {
     var isItalic by remember { mutableStateOf(false) }
     var isUnderLine by remember { mutableStateOf(false) }
 
+    var linkName by remember { mutableStateOf("") }
+    var linkAddress by remember { mutableStateOf("") }
+
     var selectedColorPickerfor by remember {
         mutableStateOf(3)
     }
@@ -274,6 +268,7 @@ fun ToolbarSection() {
 
 
     var shouldShowDialog by remember { mutableStateOf(false) }
+    var shouldShowLinkDialog by remember { mutableStateOf(false) }
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
     Log.i("DesignActivity", "ToolbarSection initialised")
@@ -349,6 +344,7 @@ fun ToolbarSection() {
                 onFontChange = { selectedFont = it },
                 onColorPickerFor = { selectedColorPickerfor = it },
                 onShowBackImageDialog = { shouldShowDialog = it },
+                onShowAddLinkDialog = {shouldShowLinkDialog=it},
                 onShowColorPicker = { showColorPicker = it },
                 imagePickerLauncher = imagePickerLauncher,
                 filePickerLauncher = filePickerLauncher,
@@ -427,6 +423,8 @@ fun ToolbarSection() {
                 onImageSelectURL = { onImageSelectURL = it },
                 selectedImageURL = onImageSelectURL,
                 shouldShowDialog,
+                shouldShowLinkDialog,
+                onShowLinkDialog={shouldShowLinkDialog=it},
                 onShowBackImageDialog = { shouldShowDialog = it },
                 openImagePicker = {
                     isbgImagePicker = true
@@ -436,7 +434,12 @@ fun ToolbarSection() {
                 barChartData = barChartData,
                 selectedBgUri,
                 setBgImage,
-                onSetBgImage = { setBgImage = it }
+                onSetBgImage = { setBgImage = it },
+                linkName,
+                linkAddress,
+                onLinkUrl = {linkName=it},
+                onLinkValueUrl = {linkAddress=it}
+
             )
         }
 
@@ -580,14 +583,22 @@ fun EditorScreen(
     onImageSelectURL: (Int) -> Unit,
     selectedImageURL: Int,
     shouldShowDialog: Boolean,
+    shouldShowLinkDialog:Boolean,
+    onShowLinkDialog:(Boolean)->Unit,
     onShowBackImageDialog: (Boolean) -> Unit,
     openImagePicker: (Boolean) -> Unit,
     imageList: List<Int>,
     barChartData: BarChartData? = null,
     selectedImageUri: Uri?,
     setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit
+    onSetBgImage: (Boolean) -> Unit,
+    onlinkvalue:String,
+    onlinkvalueUrl:String,
+    onLinkUrl: (String) -> Unit,
+    onLinkValueUrl: (String) -> Unit
 ) {
+
+    var  latestState by remember { mutableStateOf(TextFieldValue("" )) }
 
     var isMissSpelled by remember { mutableStateOf(false) }
     var misspelledWords by remember { mutableStateOf(listOf<String>()) }
@@ -617,6 +628,7 @@ fun EditorScreen(
         isKeyboardVisible.value = isVisible
     })
 
+    val context = LocalContext.current
 
 
     val fontInt = getFontListFromAssets().get(selectedFont)
@@ -695,6 +707,7 @@ fun EditorScreen(
             imageList
         )
 
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -707,7 +720,7 @@ fun EditorScreen(
             Slider(
                 value = selectedFontSize.value,
                 onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
+                valueRange = 10f..72f,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Column(modifier = Modifier.fillMaxSize()) {
@@ -982,7 +995,7 @@ fun EditorScreen(
                 contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
                     // textInput=content.text
-                    TextField(
+                   /* TextField(
                         value = content.text,
                         onValueChange = {
                           //  textInput = it
@@ -1006,7 +1019,33 @@ fun EditorScreen(
                                 Font(fontInt!!, FontWeight.Normal)
                             )
                         )
+                    )*/
+
+                  // var  textState by remember { mutableStateOf(TextFieldValue(content.text )) }
+                   // latestState=textState
+
+
+                    AddLinkDialog(shouldShowDialog = shouldShowLinkDialog, onDismiss = { onShowLinkDialog(false) }, onLinkUrl = { onTextChange(content.text+" "+it)
+                        onLinkUrl(it)}, onLinkValueUrl = {onLinkValueUrl(it)},onlinkvalue,onlinkvalueUrl)
+
+                    HyperlinkTextField(
+                        content = content.text,
+                        onTextChange = {
+                                       onTextChange(it)},
+                        selectedFontSize = selectedFontSize,
+                        isBold = isBold,
+                        isItalic = isItalic,
+                        isUnderline = isUnderline,
+                        selectedColor = selectedColor,
+                        fontInt = fontInt,
+                        backgroundColor = backgroundcolor,
+                        context = context,
+                        onlinkvalue,
+                        onlinkvalueUrl,
+                        onLinkUrl={onLinkUrl(it)},
+                        onLinkValue={onLinkValueUrl(it)}
                     )
+
 
                     scope.launch {
                         delay(3 * 1000L) // 1 second delay
@@ -1042,6 +1081,127 @@ fun EditorScreen(
         }else isMenuOpen = false
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HyperlinkTextField(
+    content: String,
+    onTextChange: (String) -> Unit,
+    selectedFontSize: androidx.compose.ui.unit.TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
+    isUnderline: Boolean,
+    selectedColor: Color,
+    fontInt: Int?,
+    backgroundColor: Color,
+    context: Context,
+    linkText:String,
+    urlValue:String,
+    onLinkUrl:(String)->Unit,
+    onLinkValue:(String)->Unit
+
+) {
+    var isEditMode by remember { mutableStateOf(true) }
+    var annotatedText by remember { mutableStateOf(buildAnnotatedString { append(content) }) }
+
+    var start = content.indexOf(linkText)
+    var end=start + linkText.length
+    LaunchedEffect(content) {
+        annotatedText = buildAnnotatedString {
+            append(content)
+            // Example link annotation, adjust indices as necessary
+             start = content.indexOf(linkText)
+             end = start + linkText.length
+            if (start != 0) {
+                addStringAnnotation(
+                    tag = "URL",
+                    annotation = urlValue,
+                    start = start,
+                    end = end // Adjust the indices as per the link position
+                )
+
+                addStyle(
+                    style = SpanStyle(
+                        color = Color.Blue, // Hyperlink color
+                        textDecoration = TextDecoration.Underline
+                    ),
+                    start = start,
+                    end = end
+                )
+                isEditMode=false
+            }
+            addStyle(
+                style = SpanStyle(
+                    color = selectedColor,
+                    fontSize = selectedFontSize,
+                    fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                    fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                    textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                    fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                ),
+                start = 0,
+                end = content.length
+            )
+        }
+    }
+
+    if (isEditMode) {
+        TextField(
+            value = content,
+            onValueChange = {
+                onTextChange(it)
+                isEditMode = true
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .border(0.5.dp, Color.White),
+            colors = textFieldColors(
+                containerColor = backgroundColor,
+                cursorColor = Color.Black
+            ),
+            textStyle = TextStyle(
+                fontSize = selectedFontSize,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                color = selectedColor,
+                fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+            )
+        )
+    } else {
+        ClickableText(
+            text = annotatedText,
+            onClick = { offset ->
+                val annotations = annotatedText.getStringAnnotations(tag = "URL",start,end)
+                annotations.forEach { annotation ->
+                    // Handle the click, e.g., open a web page
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                    context.startActivity(intent)
+                    println("Clicked on: ${annotation.item}")
+                }
+                isEditMode = true
+                onLinkValue("")
+                onLinkUrl("")
+
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .border(0.5.dp, Color.White),
+            style = TextStyle(
+                fontSize = selectedFontSize,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                color = selectedColor,
+                fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+            )
+        )
+    }
+}
+
+
 suspend fun loadDictionary(context: Context): Set<String> {
     return withContext(Dispatchers.IO) {
         val words = mutableSetOf<String>()
@@ -1191,6 +1351,7 @@ fun BottomMenuColumn(
     onFontChange: (String) -> Unit,
     onColorPickerFor: (Int) -> Unit,
     onShowBackImageDialog: (Boolean) -> Unit,
+    onShowAddLinkDialog:(Boolean)->Unit,
     onShowColorPicker: (Boolean) -> Unit,
     imagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     filePickerLauncher: ManagedActivityResultLauncher<Array<String>, Uri?>,
@@ -1333,6 +1494,8 @@ fun BottomMenuColumn(
                         onColorPickerFor(0)
                     } else if (item.title.equals("Image")) {
                         imagePickerLauncher.launch("image/*")
+                    } else if (item.title.equals("Link")) {
+                        onShowAddLinkDialog(true)
                     } else if (item.title.equals("Background Image")) {
                         onShowBackImageDialog(true)
                     } else if (item.title.equals("File")) {
@@ -1741,7 +1904,72 @@ fun ImageListAlertDialog(
 }
 
 
+@Composable
+fun AddLinkDialog(
+    shouldShowDialog: Boolean,
+    onDismiss: () -> Unit,
+    onLinkUrl: (String) -> Unit,
+    onLinkValueUrl: (String) -> Unit,
+    onlinkvalue: String,
+    onlinkvalueUrl: String
+) {
+    var linkName by remember { mutableStateOf(onlinkvalue) }
+    var linkValue by remember { mutableStateOf(onlinkvalueUrl) }
+    if (shouldShowDialog) {
+        AlertDialog(
+            onDismissRequest = { /*shouldShowDialog = false*/  },
+            title = { Text(text = "Add Link") },
+            text = {
 
+                // Display image contents in a LazyVerticalGrid
+                Column {
+                    Text(text = "Link Name")
+                    OutlinedTextField(
+                        value = linkName,
+                        onValueChange = {
+                            linkName=(it)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(text = "Link Address")
+                    OutlinedTextField(
+                        value = linkValue,
+                        onValueChange = {
+                            linkValue=(it)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onLinkValueUrl(linkValue)
+                        onLinkUrl(linkName)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Submit")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
+
+                        //  pickfromGallery(false)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
 
 
 @Composable
