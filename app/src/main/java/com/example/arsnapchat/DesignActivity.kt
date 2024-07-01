@@ -2,8 +2,6 @@ package com.example.arsnapchat
 
 
 import android.app.Activity
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -20,9 +18,7 @@ import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.util.Base64
 import android.util.Log
-import android.view.View
 import android.view.ViewTreeObserver
-import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.ManagedActivityResultLauncher
@@ -38,12 +34,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,14 +44,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -74,6 +65,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextFieldDefaults.textFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -88,7 +80,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -97,11 +88,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
@@ -114,8 +108,6 @@ import androidx.core.net.toUri
 import coil.compose.rememberAsyncImagePainter
 import com.example.arsnapchat.model.BarChartData
 import com.example.arsnapchat.model.BottomMenuContent
-import com.example.arsnapchat.model.ChartData
-import com.example.arsnapchat.model.Course
 import com.example.arsnapchat.model.EditorContent
 import com.example.arsnapchat.model.ImageContent
 import com.example.arsnapchat.model.TextContent
@@ -136,7 +128,6 @@ import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStream
-import kotlin.math.abs
 
 
 class DesignActivity : ComponentActivity() {
@@ -198,438 +189,6 @@ fun GreetingPreview() {
 }
 
 
-@Composable
-fun GreetingSection(name: String = "Geeks") {
-    Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(15.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.Center) {
-            // heading text view
-            Text(text = "Good morning, $name", style = MaterialTheme.typography.headlineSmall)
-            Text(text = "We wish you have a good day!", style = MaterialTheme.typography.bodySmall)
-        }
-        // search icon
-        Icon(
-            painter = painterResource(id = R.drawable.baseline_search_24),
-            contentDescription = "Search",
-            tint = Color.White,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-// This is how we can create chip seaction at the top of app
-
-@Composable
-fun ChipSection(
-    // function with single argument
-    chips: List<String>
-) {
-    var selectedChipIndex by remember {
-        // it will not update the string
-        // but save and it will helpful for us
-        mutableStateOf(0)
-    }
-    LazyRow {
-        items(chips.size) {
-            androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .padding(start = 15.dp, top = 15.dp, bottom = 15.dp)
-                    .clickable {
-                        selectedChipIndex = it
-                    }
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        // this is basic condition for selected chip index
-
-                        if (selectedChipIndex == it) Color.Green
-                        else Color.Gray
-                    )
-                    .padding(15.dp)
-            ) {
-                Text(text = chips[it], color = Color.White)
-            }
-        }
-    }
-
-}
-
-// This function is for suggestion secation
-@Composable
-fun SuggestionSection(color: Color = Color.Blue) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        modifier = Modifier
-            .padding(15.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(color)
-            .padding(horizontal = 15.dp, vertical = 20.dp)
-            .fillMaxWidth()
-
-    ) {
-        Column {
-            // here are two text views or we can say only text
-
-            Text(
-                text = "Daily Coding",
-                // it can be litile bit confusing but
-                // it is just text style alternate
-                // of fontfamily in XML
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Text( // same as above
-                text = "do at least . 3-10 problems / day",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White
-            )
-
-        }
-
-        androidx.compose.foundation.layout.Box( // box containing icon
-            contentAlignment = Alignment.Center, modifier = Modifier
-                .size(40.dp)
-                .clip(
-                    CircleShape
-                )
-                .background(Color.Green)
-                .padding(10.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_play_circle_24),
-                contentDescription = "Play",
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-    }
-}
-
-@Composable
-// this function tells us that
-// how menu item should look like
-fun BottomMenu(
-    items: List<BottomMenuContent>,
-    modifier: Modifier = Modifier,
-    activeHighlightColor: Color = Color.Green,
-    activeTextColor: Color = Color.White,
-    inactiveTextColor: Color = Color.White,
-    initialSelectedItemIndex: Int = 1
-) {
-    var selectedItemIndex by remember {
-        mutableStateOf(initialSelectedItemIndex)
-    }
-    Row(
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color.Blue)
-            .padding(15.dp)
-    ) {
-        // it is basically what we should have
-        // for creating an element of BottomMenuItem
-        items.forEachIndexed { index, item ->
-            BottomMenuItem(
-                item = item, isSelected = index == selectedItemIndex,
-                activeHighlightColor = activeHighlightColor,
-                inactiveTextColor = inactiveTextColor
-            ) {
-                selectedItemIndex = index
-            }
-        }
-
-
-    }
-}
-
-
-// it's basically how menu item should look like
-@Composable
-fun BottomMenuItem(
-    item: BottomMenuContent,
-    isSelected: Boolean = false,
-    activeHighlightColor: Color = Color.Green,
-    activeTextColor: Color = Color.White,
-    inactiveTextColor: Color = Color.Blue,
-    onItemClick: () -> Unit
-) {
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.clickable { onItemClick }) {
-// here are some peremetens
-        // for how elements will align
-        androidx.compose.foundation.layout.Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(if (isSelected) activeHighlightColor else Color.Transparent)
-                .padding(10.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = item.iconId),
-                contentDescription = item.title,
-                tint = if (isSelected) activeTextColor else inactiveTextColor,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Text(
-            text = item.title,
-            // it's basic condition
-            color = if (isSelected) activeTextColor else inactiveTextColor
-        )
-
-    }
-
-}
-
-@ExperimentalFoundationApi
-@Composable
-// here we have just passed the list of courses
-fun CourseSection(courses: List<Course>) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "courses",
-            style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(15.dp)
-        )
-        // we have used lazyVertically grid
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 7.5.dp, end = 7.5.dp, bottom = 100.dp),
-            modifier = Modifier.fillMaxHeight()
-        ) {
-            items(courses.size) {
-                // here we have to define how one of these item is look like
-                // we will tell after defining item design
-                // let me comment it for now and after
-                // creating you just have to remove
-
-                CourseItem(course = courses[it])
-            }
-
-        }
-
-    }
-
-
-}
-
-
-@Composable
-fun CourseItem(course: Course) {
-    BoxWithConstraints( // Box with some attributes
-        modifier = Modifier
-            .padding(7.5.dp)
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(R.color.colorAccent))
-    ) {
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        // setting 5 points for medium
-        // color or we can say for another
-        // Medium colored path
-        val mediumColoredPoint1 = Offset(0f, height * 0.3f)
-        val mediumColoredPoint2 = Offset(width * 0.1f, height * 0.35f)
-        val mediumColoredPoint3 = Offset(width * 0.4f, height * 0.05f)
-        val mediumColoredPoint4 = Offset(width * 0.75f, height * 0.7f)
-        val mediumColoredPoint5 = Offset(width * 1.4f, -height.toFloat())
-        // joining points to make curves with the help of path class
-        // path file that we have created earlier
-        // having function that just help to reduce our code
-        // and the function is standardQuadFromTo(m1,m2) taking
-        // two peramente and connect them
-        val mediumColoredPath = Path().apply {
-            moveTo(mediumColoredPoint1.x, mediumColoredPoint1.y)
-            standardQuadFromTo(mediumColoredPoint1, mediumColoredPoint2)
-            standardQuadFromTo(mediumColoredPoint2, mediumColoredPoint3)
-            standardQuadFromTo(mediumColoredPoint3, mediumColoredPoint4)
-            standardQuadFromTo(mediumColoredPoint4, mediumColoredPoint5)
-            lineTo(width.toFloat() + 100f, height.toFloat() + 100f)
-            lineTo(-100f, height.toFloat() + 100f)
-            close()
-        }
-
-        // it's another part of that
-        // texture with light color
-        // Light colored path
-        val lightPoint1 = Offset(0f, height * 0.35f)
-        val lightPoint2 = Offset(width * 0.1f, height * 0.4f)
-        val lightPoint3 = Offset(width * 0.3f, height * 0.35f)
-        val lightPoint4 = Offset(width * 0.65f, height.toFloat())
-        val lightPoint5 = Offset(width * 1.4f, -height.toFloat())
-
-        val lightColoredPath = Path().apply {
-            moveTo(lightPoint1.x, lightPoint1.y)
-            standardQuadFromTo(lightPoint1, lightPoint2)
-            standardQuadFromTo(lightPoint2, lightPoint3)
-            standardQuadFromTo(lightPoint3, lightPoint4)
-            standardQuadFromTo(lightPoint4, lightPoint5)
-            lineTo(width.toFloat() + 100f, height.toFloat() + 100f)
-            lineTo(-100f, height.toFloat() + 100f)
-            close()
-        }
-
-// canvas is used when we
-        // want to draw something
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            drawPath(// function for drawing paths
-                // just pass the path
-                path = mediumColoredPath, color = course.mediumColor
-            )
-            drawPath(// it's for the lighter path
-                path = lightColoredPath, color = course.lightColor
-            )
-        }
-
-// so , we have done with texture and
-        // now just creating box and other things
-        // box containing course elements
-        androidx.compose.foundation.layout.Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(15.dp)
-        ) {
-            Text(
-                text = course.title,
-                style = MaterialTheme.typography.headlineMedium,
-                lineHeight = 26.sp,
-                modifier = Modifier.align(Alignment.TopStart)
-            )
-            Icon(
-                painter = painterResource(id = course.iconId),
-                contentDescription = course.title,
-                tint = Color.White,
-                modifier = Modifier.align(Alignment.BottomStart)
-            )
-            Text(
-                text = "Start",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clickable {
-                        // Handle the clicks
-                    }
-                    .align(Alignment.BottomEnd)
-                    .clip(
-                        RoundedCornerShape(10.dp)
-                    )
-                    .background(Color.Green)
-                    .padding(vertical = 6.dp, horizontal = 15.dp)
-            )
-
-        }
-    }
-}
-
-fun Path.standardQuadFromTo(from: Offset, to: Offset) {
-    // this function is basically draw
-    // a line to our second point and
-    // also smooth on that line and make it curve
-    quadraticBezierTo(from.x, from.y, abs(from.x + to.x) / 2f, abs(from.y + to.y) / 2f)
-}
-
-@ExperimentalFoundationApi
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    // HomeSccreen() this is the most outer box that will
-    // contain all the views,buttons,chips,etc.
-    Box(
-        modifier = Modifier
-            .background(Color(R.color.Beige2))
-            .fillMaxSize()
-    ) {
-        Column {
-            // this is the function for header
-            GreetingSection()
-            // it's for chipsSecation, and pass
-            // as many strings as you want
-            ChipSection(
-                chips = listOf(
-                    "Data structure",
-                    "Algorithm",
-                    "competitive programming",
-                    "python"
-                )
-            )
-            // function for suggestionSection
-            SuggestionSection()
-            // this is for course secation
-            CourseSection(
-                // function require list of courses and
-                // one course contain 5 attributes
-                courses = listOf(
-                    Course(
-                        title = "greek of the year",
-                        R.drawable.baseline_headphones_24,
-                        Color.Blue,
-                        Color.DarkGray,
-                        Color.LightGray
-                    ),
-                    Course(
-                        title = "How does AI Works",
-                        R.drawable.baseline_videocam_24,
-                        Color.Green,
-                        Color.Black,
-                        Color.Black
-                    ),
-                    Course(
-                        title = "Advance python Course",
-                        R.drawable.baseline_play_circle_24,
-                        Color(R.color.skyblue1),
-                        Color(R.color.skyblue2),
-                        Color(R.color.skyblue3)
-                    ),
-                    Course(
-                        title = "Advance Java Course",
-                        R.drawable.baseline_headphones_24,
-                        Color(R.color.Beige1),
-                        Color(R.color.Beige2),
-                        Color(R.color.Beige3)
-                    ),
-                    Course(
-                        title = "prepare for aptitude test",
-                        R.drawable.baseline_play_circle_24,
-                        Color(R.color.OrangeYellow1),
-                        Color(R.color.OrangeYellow2),
-                        Color(R.color.OrangeYellow3)
-                    ),
-                    Course(
-                        title = "How does AI Works",
-                        R.drawable.baseline_videocam_24,
-                        Color(R.color.LightGreen1),
-                        Color(R.color.LightGreen2),
-                        Color(R.color.LightGreen3)
-                    ),
-
-                    )
-            )
-
-
-        }
-
-        // this is the final one that is bottomMenu
-        BottomMenu(
-            items = listOf(
-                // having 5 instances
-                BottomMenuContent("Home", R.drawable.baseline_home_24),
-                BottomMenuContent("explore", R.drawable.baseline_explore_24),
-                BottomMenuContent("dark mode", R.drawable.baseline_shield_moon_24),
-                BottomMenuContent("videos", R.drawable.baseline_videocam_24),
-                BottomMenuContent("Profile", R.drawable.baseline_self_improvement_24),
-            ), modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-    }
-}
 
 @Composable
 @ExperimentalFoundationApi
@@ -673,30 +232,7 @@ fun replaceTextAtIndex(contents: List<Content>, index: Int?, newText: String): L
 
 }
 
-fun saveImageToGallery(context: Context, bitmap: Bitmap, displayName: String): Uri? {
-    val resolver = context.contentResolver
-    val contentValues = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyAppImages")
-        }
-    }
 
-    val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-    imageUri?.let {
-        val outputStream: OutputStream? = resolver.openOutputStream(it)
-        outputStream?.use { stream ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
-        }
-    }
-    return imageUri
-}
-
-fun loadImageFromUri(context: Context, uri: Uri): Bitmap? {
-    val inputStream = context.contentResolver.openInputStream(uri)
-    return BitmapFactory.decodeStream(inputStream)
-}
 
 @Composable
 fun ToolbarSection() {
@@ -707,6 +243,9 @@ fun ToolbarSection() {
     var isBold by remember { mutableStateOf(false) }
     var isItalic by remember { mutableStateOf(false) }
     var isUnderLine by remember { mutableStateOf(false) }
+
+    var linkName by remember { mutableStateOf("") }
+    var linkAddress by remember { mutableStateOf("") }
 
     var selectedColorPickerfor by remember {
         mutableStateOf(3)
@@ -729,6 +268,7 @@ fun ToolbarSection() {
 
 
     var shouldShowDialog by remember { mutableStateOf(false) }
+    var shouldShowLinkDialog by remember { mutableStateOf(false) }
     val imageList = listOf(R.drawable.blue, R.drawable.brown, R.drawable.gold, R.drawable.yellow)
 
     Log.i("DesignActivity", "ToolbarSection initialised")
@@ -804,6 +344,7 @@ fun ToolbarSection() {
                 onFontChange = { selectedFont = it },
                 onColorPickerFor = { selectedColorPickerfor = it },
                 onShowBackImageDialog = { shouldShowDialog = it },
+                onShowAddLinkDialog = {shouldShowLinkDialog=it},
                 onShowColorPicker = { showColorPicker = it },
                 imagePickerLauncher = imagePickerLauncher,
                 filePickerLauncher = filePickerLauncher,
@@ -882,6 +423,8 @@ fun ToolbarSection() {
                 onImageSelectURL = { onImageSelectURL = it },
                 selectedImageURL = onImageSelectURL,
                 shouldShowDialog,
+                shouldShowLinkDialog,
+                onShowLinkDialog={shouldShowLinkDialog=it},
                 onShowBackImageDialog = { shouldShowDialog = it },
                 openImagePicker = {
                     isbgImagePicker = true
@@ -891,7 +434,12 @@ fun ToolbarSection() {
                 barChartData = barChartData,
                 selectedBgUri,
                 setBgImage,
-                onSetBgImage = { setBgImage = it }
+                onSetBgImage = { setBgImage = it },
+                linkName,
+                linkAddress,
+                onLinkUrl = {linkName=it},
+                onLinkValueUrl = {linkAddress=it}
+
             )
         }
 
@@ -1035,14 +583,22 @@ fun EditorScreen(
     onImageSelectURL: (Int) -> Unit,
     selectedImageURL: Int,
     shouldShowDialog: Boolean,
+    shouldShowLinkDialog:Boolean,
+    onShowLinkDialog:(Boolean)->Unit,
     onShowBackImageDialog: (Boolean) -> Unit,
     openImagePicker: (Boolean) -> Unit,
     imageList: List<Int>,
     barChartData: BarChartData? = null,
     selectedImageUri: Uri?,
     setBgImage: Boolean,
-    onSetBgImage: (Boolean) -> Unit
+    onSetBgImage: (Boolean) -> Unit,
+    onlinkvalue:String,
+    onlinkvalueUrl:String,
+    onLinkUrl: (String) -> Unit,
+    onLinkValueUrl: (String) -> Unit
 ) {
+
+    var  latestState by remember { mutableStateOf(TextFieldValue("" )) }
 
     var isMissSpelled by remember { mutableStateOf(false) }
     var misspelledWords by remember { mutableStateOf(listOf<String>()) }
@@ -1072,6 +628,7 @@ fun EditorScreen(
         isKeyboardVisible.value = isVisible
     })
 
+    val context = LocalContext.current
 
 
     val fontInt = getFontListFromAssets().get(selectedFont)
@@ -1150,6 +707,7 @@ fun EditorScreen(
             imageList
         )
 
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1162,7 +720,7 @@ fun EditorScreen(
             Slider(
                 value = selectedFontSize.value,
                 onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
+                valueRange = 10f..72f,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
             Column(modifier = Modifier.fillMaxSize()) {
@@ -1378,7 +936,8 @@ fun EditorScreen(
 
                     ) {
                         Row(
-                            modifier = Modifier.background(Color.LightGray)
+                            modifier = Modifier
+                                .background(Color.LightGray)
                         ) {
                             IconButton(
                                 onClick = { onBoldChange(!isBold) },
@@ -1436,7 +995,7 @@ fun EditorScreen(
                 contents.filterIsInstance<Content.Text>().forEach { content ->
                     isdata = true
                     // textInput=content.text
-                    TextField(
+                   /* TextField(
                         value = content.text,
                         onValueChange = {
                           //  textInput = it
@@ -1460,7 +1019,34 @@ fun EditorScreen(
                                 Font(fontInt!!, FontWeight.Normal)
                             )
                         )
+                    )*/
+
+                  // var  textState by remember { mutableStateOf(TextFieldValue(content.text )) }
+                   // latestState=textState
+
+
+                    AddLinkDialog(shouldShowDialog = shouldShowLinkDialog, onDismiss = { onShowLinkDialog(false) }, onLinkUrl = { onTextChange(content.text+" "+it)
+                        onLinkUrl(it)}, onLinkValueUrl = {onLinkValueUrl(it)},onlinkvalue,onlinkvalueUrl)
+
+                    HyperlinkTextField(
+                        content = content.text,
+                        onTextChange = {
+                                       onTextChange(it)},
+                        selectedFontSize = selectedFontSize,
+                        isBold = isBold,
+                        isItalic = isItalic,
+                        isUnderline = isUnderline,
+                        selectedColor = selectedColor,
+                        fontInt = fontInt,
+                        backgroundColor = backgroundcolor,
+                        context = context,
+                        onlinkvalue,
+                        onlinkvalueUrl,
+                        onLinkUrl={onLinkUrl(it)},
+                        onLinkValue={onLinkValueUrl(it)}
                     )
+
+
                     scope.launch {
                         delay(3 * 1000L) // 1 second delay
                         lastWord = content.text.split(" ").lastOrNull() ?: ""
@@ -1495,6 +1081,127 @@ fun EditorScreen(
         }else isMenuOpen = false
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HyperlinkTextField(
+    content: String,
+    onTextChange: (String) -> Unit,
+    selectedFontSize: androidx.compose.ui.unit.TextUnit,
+    isBold: Boolean,
+    isItalic: Boolean,
+    isUnderline: Boolean,
+    selectedColor: Color,
+    fontInt: Int?,
+    backgroundColor: Color,
+    context: Context,
+    linkText:String,
+    urlValue:String,
+    onLinkUrl:(String)->Unit,
+    onLinkValue:(String)->Unit
+
+) {
+    var isEditMode by remember { mutableStateOf(true) }
+    var annotatedText by remember { mutableStateOf(buildAnnotatedString { append(content) }) }
+
+    var start = content.indexOf(linkText)
+    var end=start + linkText.length
+    LaunchedEffect(content) {
+        annotatedText = buildAnnotatedString {
+            append(content)
+            // Example link annotation, adjust indices as necessary
+             start = content.indexOf(linkText)
+             end = start + linkText.length
+            if (start != 0) {
+                addStringAnnotation(
+                    tag = "URL",
+                    annotation = urlValue,
+                    start = start,
+                    end = end // Adjust the indices as per the link position
+                )
+
+                addStyle(
+                    style = SpanStyle(
+                        color = Color.Blue, // Hyperlink color
+                        textDecoration = TextDecoration.Underline
+                    ),
+                    start = start,
+                    end = end
+                )
+                isEditMode=false
+            }
+            addStyle(
+                style = SpanStyle(
+                    color = selectedColor,
+                    fontSize = selectedFontSize,
+                    fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                    fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                    textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                    fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+                ),
+                start = 0,
+                end = content.length
+            )
+        }
+    }
+
+    if (isEditMode) {
+        TextField(
+            value = content,
+            onValueChange = {
+                onTextChange(it)
+                isEditMode = true
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .border(0.5.dp, Color.White),
+            colors = textFieldColors(
+                containerColor = backgroundColor,
+                cursorColor = Color.Black
+            ),
+            textStyle = TextStyle(
+                fontSize = selectedFontSize,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                color = selectedColor,
+                fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+            )
+        )
+    } else {
+        ClickableText(
+            text = annotatedText,
+            onClick = { offset ->
+                val annotations = annotatedText.getStringAnnotations(tag = "URL",start,end)
+                annotations.forEach { annotation ->
+                    // Handle the click, e.g., open a web page
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
+                    context.startActivity(intent)
+                    println("Clicked on: ${annotation.item}")
+                }
+                isEditMode = true
+                onLinkValue("")
+                onLinkUrl("")
+
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+                .border(0.5.dp, Color.White),
+            style = TextStyle(
+                fontSize = selectedFontSize,
+                fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal,
+                textDecoration = if (isUnderline) TextDecoration.Underline else TextDecoration.None,
+                color = selectedColor,
+                fontFamily = FontFamily(Font(fontInt!!, FontWeight.Normal))
+            )
+        )
+    }
+}
+
+
 suspend fun loadDictionary(context: Context): Set<String> {
     return withContext(Dispatchers.IO) {
         val words = mutableSetOf<String>()
@@ -1558,12 +1265,12 @@ fun bitmapToBase64(bitmap: Bitmap): String {
 
 
 fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
-    try {
+    return try {
         val byteArray = Base64.decode(base64String, Base64.DEFAULT)
-        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
     } catch (e: Exception) {
         e.printStackTrace()
-        return try {
+        try {
             val inputStream = context.contentResolver.openInputStream(base64String.toUri())
             BitmapFactory.decodeStream(inputStream)
         } catch (e: Exception) {
@@ -1635,16 +1342,7 @@ fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
     }
 }
 
-fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
-    val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
-    return FontFamily(typeface)
-}
 
-@Composable
-fun LoadImageFromStorage(filePath: String): Painter {
-    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
-    return imagePainter
-}
 
 @Composable
 fun BottomMenuColumn(
@@ -1653,6 +1351,7 @@ fun BottomMenuColumn(
     onFontChange: (String) -> Unit,
     onColorPickerFor: (Int) -> Unit,
     onShowBackImageDialog: (Boolean) -> Unit,
+    onShowAddLinkDialog:(Boolean)->Unit,
     onShowColorPicker: (Boolean) -> Unit,
     imagePickerLauncher: ManagedActivityResultLauncher<String, Uri?>,
     filePickerLauncher: ManagedActivityResultLauncher<Array<String>, Uri?>,
@@ -1795,6 +1494,8 @@ fun BottomMenuColumn(
                         onColorPickerFor(0)
                     } else if (item.title.equals("Image")) {
                         imagePickerLauncher.launch("image/*")
+                    } else if (item.title.equals("Link")) {
+                        onShowAddLinkDialog(true)
                     } else if (item.title.equals("Background Image")) {
                         onShowBackImageDialog(true)
                     } else if (item.title.equals("File")) {
@@ -1845,7 +1546,7 @@ fun BottomMenuColumn(
 
                         val serializedData = serializeEditorContent(editorContent)
 
-                        Log.i("DesignActivity", "save $serializedData")
+                       // Log.i("DesignActivity", "save $serializedData")
 
                         saveToSharedPreferences(context = context, "editorContent", serializedData)
 
@@ -1890,7 +1591,7 @@ fun BottomMenuColumn(
 
 
                                 it.chartData?.let { it1 -> onBarChartDataChange(it1) }
-                                showDialog = false
+                               // showDialog = false
 
                                /* Log.i(
                                     "DesignActivity",
@@ -2204,6 +1905,74 @@ fun ImageListAlertDialog(
 
 
 @Composable
+fun AddLinkDialog(
+    shouldShowDialog: Boolean,
+    onDismiss: () -> Unit,
+    onLinkUrl: (String) -> Unit,
+    onLinkValueUrl: (String) -> Unit,
+    onlinkvalue: String,
+    onlinkvalueUrl: String
+) {
+    var linkName by remember { mutableStateOf(onlinkvalue) }
+    var linkValue by remember { mutableStateOf(onlinkvalueUrl) }
+    if (shouldShowDialog) {
+        AlertDialog(
+            onDismissRequest = { /*shouldShowDialog = false*/  },
+            title = { Text(text = "Add Link") },
+            text = {
+
+                // Display image contents in a LazyVerticalGrid
+                Column {
+                    Text(text = "Link Name")
+                    OutlinedTextField(
+                        value = linkName,
+                        onValueChange = {
+                            linkName=(it)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(text = "Link Address")
+                    OutlinedTextField(
+                        value = linkValue,
+                        onValueChange = {
+                            linkValue=(it)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onLinkValueUrl(linkValue)
+                        onLinkUrl(linkName)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Submit")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
+
+                        //  pickfromGallery(false)
+                        onDismiss()
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+
+@Composable
 fun ItemCard(item: BottomMenuContent) {
     Row(
         modifier = Modifier
@@ -2235,4 +2004,38 @@ fun ItemList(items: List<BottomMenuContent>) {
     }
 }
 
+fun saveImageToGallery(context: Context, bitmap: Bitmap, displayName: String): Uri? {
+    val resolver = context.contentResolver
+    val contentValues = ContentValues().apply {
+        put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyAppImages")
+        }
+    }
 
+    val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+    imageUri?.let {
+        val outputStream: OutputStream? = resolver.openOutputStream(it)
+        outputStream?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
+        }
+    }
+    return imageUri
+}
+
+fun loadImageFromUri(context: Context, uri: Uri): Bitmap? {
+    val inputStream = context.contentResolver.openInputStream(uri)
+    return BitmapFactory.decodeStream(inputStream)
+}
+
+fun getFontFromAssetsByName(context: Context, fontName: String): FontFamily {
+    val typeface = Typeface.createFromAsset(context.assets, "fonts/$fontName")
+    return FontFamily(typeface)
+}
+
+@Composable
+fun LoadImageFromStorage(filePath: String): Painter {
+    val imagePainter = rememberAsyncImagePainter(model = File(filePath))
+    return imagePainter
+}
