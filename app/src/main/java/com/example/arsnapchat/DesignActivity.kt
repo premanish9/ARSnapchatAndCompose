@@ -853,75 +853,6 @@ fun EditorScreen(
 
                  }
                 // Display image, audio, and video contents in a LazyVerticalGrid
-                /*LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents) { content ->
-                        when (content) {
-                            is Content.Image -> {
-                                Log.i("DesignActivity","LazyVerticalGrid 1")
-                                Image(
-                                    painter = rememberAsyncImagePainter(model = content.uri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
-
-                            is Content.Audio -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.music_file),
-                                        contentDescription = "Audio",
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            is Content.Video -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.video_file),
-                                        contentDescription = "Video",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
-                }*/
 
                 //display bar-chart
                 barChartData?.let { data ->
@@ -1084,6 +1015,9 @@ fun EditorScreen(
                         delay(3 * 1000L) // 1 second delay
                         lastWord = content.text.split(" ").lastOrNull() ?: ""
                         isMissSpelled = !dictionary.contains(lastWord)
+                        if (lastWord.equals("") || lastWord.equals(" ")) {
+                            isMissSpelled = false
+                        }
                         if (isMissSpelled) suggestions = getRelatedWords(lastWord = lastWord,dictionary)
                         Log.d("TextFieldisMissSpelled", "Text input:, isMissSpelled: $isMissSpelled")
                         Log.d("isdatais ",lastWord)
@@ -1271,7 +1205,9 @@ suspend fun loadDictionary(context: Context): Set<String> {
 }
 fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
     val suggestions = mutableListOf<String>()
-
+    if (lastWord == "" || lastWord == " ") {
+        return emptyList()
+    }
     // Case 1: Check for words starting with the same characters as lastWord
     val startingWithSameChars = dictionary.filter { it.startsWith(lastWord, ignoreCase = true) }
     suggestions.addAll(startingWithSameChars.take(5))
@@ -1522,7 +1458,7 @@ fun BottomMenuColumn(
                 BottomMenuContent("Open", R.drawable.baseline_link_24),
             )
 
-            5 -> listOf(BottomMenuContent("Color Picker", R.drawable.baseline_format_color_text_24))
+            5 -> listOf(BottomMenuContent("Font Color Picker", R.drawable.baseline_format_color_text_24))
 
             else -> emptyList()
         }
@@ -1540,7 +1476,7 @@ fun BottomMenuColumn(
                         onFontChange(item.title)
                     }
 
-                    if (item.title.contains("Color Picker")) {
+                    if (item.title.contains("Font Color Picker")) {
                         onShowColorPicker(true)
                         onColorPickerFor(0)
                     } else if (item.title.equals("Image")) {
