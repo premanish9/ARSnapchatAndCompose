@@ -2,6 +2,7 @@ package com.example.arsnapchat
 
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -43,6 +44,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -717,12 +719,43 @@ fun EditorScreen(
 
             var isdata = false
 
-            Slider(
+           /* Slider(
                 value = selectedFontSize.value,
                 onValueChange = { onFontSizeChange(it) },
                 valueRange = 10f..72f,
                 modifier = Modifier.padding(vertical = 8.dp)
-            )
+            )*/
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                Slider(
+                    value = selectedFontSize.value,
+                    onValueChange = { onFontSizeChange(it) },
+                    valueRange = 10f..30f,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TextField(
+                    value = selectedFontSize.value.toString(),
+                    onValueChange = {
+                        val size = it.toFloatOrNull()
+                        if (size != null) {
+                            onFontSizeChange(size)
+                        }
+                    },
+                    label = { Text("Size") },
+                    modifier = Modifier
+                        .width(80.dp)
+                        .border(0.5.dp, Color.White),
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = Color.Transparent,
+                        cursorColor = Color.Black
+                    )
+                )
+            }
+
             Column(modifier = Modifier.fillMaxSize()) {
                 // Display text contents in a Column
 
@@ -893,7 +926,7 @@ fun EditorScreen(
                 //display bar-chart
                 barChartData?.let { data ->
                     Log.d("Barchartdatwa", "$data ---dataPoints")
-                    BarChart(data.labels, data.dataPoints)
+                    BarChart(data.labels, data.dataPoints,selectedFontSize.value)
                 }
                /* if (isKeyboardVisible.value) {
                     Row(
@@ -1200,7 +1233,25 @@ fun HyperlinkTextField(
         )
     }
 }
+fun openUrl(url: String,context: Context) {
+    try {
+        // Check if the URL starts with http or https
+        val validUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
+            url
+        } else {
+            "https://$url"
+        }
 
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            data = Uri.parse(validUrl)
+        }
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        Toast.makeText(context, "No application found to open this link", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Invalid URL", Toast.LENGTH_SHORT).show()
+    }
+}
 
 suspend fun loadDictionary(context: Context): Set<String> {
     return withContext(Dispatchers.IO) {
@@ -1667,8 +1718,8 @@ fun deserializeEditorContent(json: String): EditorContent? {
     return gson.fromJson(json, EditorContent::class.java)
 }
 
-@Composable
-fun BarChart(labels: List<String>, dataPoints: List<Float>) {
+/*@Composable
+fun BarChart(labels: List<String>, dataPoints: List<Float>,txtSize: Float) {
     Log.d("Barchartdata", "$labels ---$dataPoints")
     val maxValue = dataPoints.maxOrNull() ?: 0f
 
@@ -1731,7 +1782,95 @@ fun BarChart(labels: List<String>, dataPoints: List<Float>) {
                         Paint().apply {
                             textAlign = Paint.Align.CENTER
                             color = android.graphics.Color.BLACK
-                            textSize = 14.sp.toPx() // convert sp to px
+                            textSize = txtSize.sp.toPx() // convert sp to px
+                        }
+                    )
+                }
+            }
+        }
+    }
+}*/
+@Composable
+fun BarChart(labels: List<String>, dataPoints: List<Float>, txtSize: Float) {
+    Log.d("Barchartdata", "$labels ---$dataPoints")
+    val maxValue = dataPoints.maxOrNull() ?: 0f
+    // Ensure both lists have the same size
+    if (labels.size != dataPoints.size) {
+        throw IllegalArgumentException("Labels and data points must have the same size")
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .padding(bottom = 5.dp)
+    ) {
+        Text(
+            "",
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+        )
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+        ) {
+            val gap = 2.dp.toPx()
+            val totalGapsWidth = gap * (labels.size - 1)
+            val barWidth =
+                (size.width / labels.size) - 5.dp.toPx() // Subtract 5dp from each bar width for gap
+            val maxValueHeight = size.height
+
+            // Draw Y-axis line
+            drawLine(
+                color = Color.Black,
+                start = Offset(0f, 0f),
+                end = Offset(0f, maxValueHeight + 2),
+                strokeWidth = 2.dp.toPx()
+            )
+
+            // Draw X-axis line
+            drawLine(
+                color = Color.Black,
+                start = Offset(0f, maxValueHeight),
+                end = Offset(size.width, maxValueHeight + 3),
+                strokeWidth = 2.dp.toPx()
+            )
+
+            dataPoints.forEachIndexed { index, dataPoint ->
+                val barHeight = (dataPoint / maxValue) * maxValueHeight
+                drawRect(
+                    color = Color.Blue,
+                    topLeft = Offset(index * (barWidth + gap), maxValueHeight - barHeight),
+                    size = Size(barWidth, barHeight)
+                )
+
+                // Draw text below each bar
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        labels[index],
+                        index * (barWidth + gap) + (barWidth / 2), // center text horizontally under the bar
+                        maxValueHeight + 16.dp.toPx(), // position text below the bars
+                        Paint().apply {
+                            textAlign = Paint.Align.CENTER
+                            color = android.graphics.Color.BLACK
+                            textSize = txtSize.sp.toPx() // convert sp to px
+                        }
+                    )
+
+                    // Draw data points inside each bar
+                    canvas.nativeCanvas.drawText(
+                        dataPoint.toString(),
+                        index * (barWidth + gap) + (barWidth / 2), // center text horizontally inside the bar
+                        maxValueHeight - barHeight + 16.dp.toPx(), // position text inside the bar
+                        Paint().apply {
+                            textAlign = Paint.Align.CENTER
+                            color = android.graphics.Color.WHITE // Use white color for visibility
+                            textSize = txtSize.sp.toPx() // convert sp to px
                         }
                     )
                 }
@@ -1740,10 +1879,13 @@ fun BarChart(labels: List<String>, dataPoints: List<Float>) {
     }
 }
 
+
 @Composable
 fun BarChartInputDialog(onDismiss: () -> Unit, onConfirm: (List<String>, List<Float>) -> Unit) {
     var labels by remember { mutableStateOf("") }
     var dataPoints by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
 
     AlertDialog(
         onDismissRequest = { onDismiss() },
@@ -1760,15 +1902,35 @@ fun BarChartInputDialog(onDismiss: () -> Unit, onConfirm: (List<String>, List<Fl
                     onValueChange = { dataPoints = it },
                     label = { Text("Data Points (comma-separated)") }
                 )
+                errorMessage?.let {
+                    Text(text = it, color = Color.Red)
+                }
             }
         },
-        confirmButton = {
+       /* confirmButton = {
             Button(
                 onClick = {
                     val labelsList = labels.split(",").map { it.trim() }
                     val dataPointsList =
                         dataPoints.split(",").map { it.trim().toFloatOrNull() ?: 0f }
                     onConfirm(labelsList, dataPointsList)
+                }
+            ) {
+                Text("OK")
+            }
+        }*/
+        confirmButton = {
+            Button(
+                onClick = {
+                    val labelsList = labels.split(",").map { it.trim() }
+                    val dataPointsList = dataPoints.split(",").map { it.trim().toFloatOrNull() ?: 0f }
+
+                    if (labelsList.size != dataPointsList.size) {
+                        errorMessage = "Labels and data points must have the same size"
+                    } else {
+                        onConfirm(labelsList, dataPointsList)
+                        onDismiss()
+                    }
                 }
             ) {
                 Text("OK")
@@ -1915,6 +2077,7 @@ fun AddLinkDialog(
 ) {
     var linkName by remember { mutableStateOf(onlinkvalue) }
     var linkValue by remember { mutableStateOf(onlinkvalueUrl) }
+    linkValue = "https://"
     if (shouldShowDialog) {
         AlertDialog(
             onDismissRequest = { /*shouldShowDialog = false*/  },
