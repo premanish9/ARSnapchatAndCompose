@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -590,7 +591,6 @@ fun EditorScreen(
 ) {
 
     var isMissSpelled by remember { mutableStateOf(false) }
-    var misspelledWords by remember { mutableStateOf(listOf<String>()) }
     var suggestions by remember { mutableStateOf(listOf<String>()) }
     // State for dropdown menu
     var isMenuOpen by remember { mutableStateOf(false) }
@@ -704,12 +704,41 @@ fun EditorScreen(
 
             var isdata = false
 
-            Slider(
+               /* Slider(
                 value = selectedFontSize.value,
                 onValueChange = { onFontSizeChange(it) },
-                valueRange = 10f..30f,
+                valueRange = 10f..72f,
                 modifier = Modifier.padding(vertical = 8.dp)
-            )
+            )*/
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                Slider(
+                    value = selectedFontSize.value,
+                    onValueChange = { onFontSizeChange(it) },
+                    valueRange = 10f..30f,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                TextField(
+                    value = selectedFontSize.value.toString(),
+                    onValueChange = {
+                        val size = it.toFloatOrNull()
+                        if (size != null) {
+                            onFontSizeChange(size)
+                        }
+                    },
+                    label = { Text("Size") },
+                    modifier = Modifier
+                        .width(80.dp)
+                        .border(0.5.dp, Color.White),
+                    colors = TextFieldDefaults.textFieldColors(
+                        containerColor = Color.Transparent,
+                        cursorColor = Color.Black
+                    )
+                )
+            }
             Column(modifier = Modifier.fillMaxSize()) {
                 // Display text contents in a Column
 
@@ -793,7 +822,7 @@ fun EditorScreen(
                                      .padding(bottom = 4.dp)
                              )
                              val context = LocalContext.current
-                                 Text(
+                                  Text(
                                      text = getFileNameFromUri(context, content.uri),
                                      textAlign = TextAlign.Center,
                                      style = TextStyle(fontSize = 14.sp)
@@ -807,115 +836,12 @@ fun EditorScreen(
 
                  }
                 // Display image, audio, and video contents in a LazyVerticalGrid
-                /*LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 100.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(contents) { content ->
-                        when (content) {
-                            is Content.Image -> {
-                                Log.i("DesignActivity","LazyVerticalGrid 1")
-                                Image(
-                                    painter = rememberAsyncImagePainter(model = content.uri),
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(200.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
-
-                            is Content.Audio -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.music_file),
-                                        contentDescription = "Audio",
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            is Content.Video -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp)
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.video_file),
-                                        contentDescription = "Video",
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(100.dp)
-                                            .padding(bottom = 4.dp)
-                                    )
-                                    val context = LocalContext.current
-                                    Text(
-                                        text = getFileNameFromUri(context, content.uri),
-                                        textAlign = TextAlign.Center,
-                                        style = TextStyle(fontSize = 14.sp)
-                                    )
-                                }
-                            }
-
-                            else -> {}
-                        }
-                    }
-                }*/
 
                 //display bar-chart
                 barChartData?.let { data ->
                     Log.d("Barchartdatwa", "$data ---dataPoints")
-                    BarChart(data.labels, data.dataPoints)
+                    BarChart(data.labels, data.dataPoints,selectedFontSize.value)
                 }
-               /* if (isKeyboardVisible.value) {
-                    Row(
-                        modifier = Modifier
-                            .background(Color.LightGray)
-                    ) {
-                        IconButton(
-                            onClick = { onBoldChange(!isBold) },
-                            modifier = Modifier.background(if (isBold) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_bold_24),
-                                contentDescription = "Bold"
-                            )
-                        }
-                        IconButton(
-                            onClick = { onItalicChange(!isItalic) },
-                            modifier = Modifier.background(if (isItalic) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_italic_24),
-                                contentDescription = "Italic"
-                            )
-                        }
-                        IconButton(
-                            onClick = { onUnderLineChange(!isUnderline) },
-                            modifier = Modifier.background(if (isUnderline) Color.DarkGray else Color.Transparent)
-                        ) {
-                            Icon(
-                                painterResource(id = R.drawable.baseline_format_underlined_24),
-                                contentDescription = "Underline"
-                            )
-                        }
-                    }
-                }*/
 
                 if (isKeyboardVisible.value) {
                     Row(
@@ -1505,7 +1431,7 @@ fun deserializeEditorContent(json: String): EditorContent? {
 }
 
 @Composable
-fun BarChart(labels: List<String>, dataPoints: List<Float>) {
+fun BarChart(labels: List<String>, dataPoints: List<Float>,txtSize: Float) {
     Log.d("Barchartdata", "$labels ---$dataPoints")
     val maxValue = dataPoints.maxOrNull() ?: 0f
 
@@ -1568,7 +1494,7 @@ fun BarChart(labels: List<String>, dataPoints: List<Float>) {
                         Paint().apply {
                             textAlign = Paint.Align.CENTER
                             color = android.graphics.Color.BLACK
-                            textSize = 14.sp.toPx() // convert sp to px
+                            textSize = txtSize.sp.toPx() // convert sp to px
                         }
                     )
                 }
