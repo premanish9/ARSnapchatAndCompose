@@ -120,6 +120,7 @@ import com.github.skydoves.colorpicker.compose.BrightnessSlider
 import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
 import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1244,12 +1245,36 @@ fun getBitmapFromUri(context: Context,uri: Uri):Bitmap? {
 
 
 fun bitmapToBase64(bitmap: Bitmap): String {
+   var base64value=""
+    val resizedBitmap = resizeBitmap(bitmap, 800, 800) // Change width and height as needed
+
     val byteArrayOutputStream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+    resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
     val byteArray = byteArrayOutputStream.toByteArray()
-    return Base64.encodeToString(byteArray, Base64.DEFAULT)
+    return  Base64.encodeToString(byteArray, Base64.DEFAULT)
+
 }
 
+
+
+fun resizeBitmap(bitmap: Bitmap, maxWidth: Int, maxHeight: Int): Bitmap {
+    var width = bitmap.width
+    var height = bitmap.height
+
+    if (width > maxWidth) {
+        val ratio = maxWidth.toFloat() / width.toFloat()
+        width = maxWidth
+        height = (height * ratio).toInt()
+    }
+
+    if (height > maxHeight) {
+        val ratio = maxHeight.toFloat() / height.toFloat()
+        height = maxHeight
+        width = (width * ratio).toInt()
+    }
+
+    return Bitmap.createScaledBitmap(bitmap, width, height, true)
+}
 
 fun base64ToBitmap(base64String: String,context : Context): Bitmap? {
     return try {
@@ -1569,7 +1594,9 @@ fun BottomMenuColumn(
                                 onFontChange(it.texts.get(0).fontFamily)
                                 onUnderLineChange(it.texts.get(0).isUnderline)
                                 onFontColorChange(it.texts.get(0).color)
+
                                 onImageSelectURL(it.texts.get(0).selectedImageURL)
+
                                 onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
 
                                 if (it.texts.get(0).selectedImageURI != null) {
