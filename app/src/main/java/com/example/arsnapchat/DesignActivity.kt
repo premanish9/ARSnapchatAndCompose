@@ -1223,35 +1223,38 @@ fun getRelatedWords(lastWord: String, dictionary: Set<String>): List<String> {
 
     return suggestions
 }
-fun getBitmapFromUri(context: Context,uri: Uri):Bitmap? {
+suspend fun getBitmapFromUri(context: Context,uri: Uri):Bitmap? {
+     return withContext(Dispatchers.IO) {
+         val contentResolver = context.contentResolver
+         var inputStream: InputStream? = null
+         var bitmap: Bitmap? = null
 
-        val contentResolver = context.contentResolver
-        var inputStream: InputStream? = null
-        var bitmap: Bitmap? = null
+         try {
+             inputStream = contentResolver.openInputStream(uri)
+             bitmap = BitmapFactory.decodeStream(inputStream)
+         } catch (e: Exception) {
+             // Handle exceptions, e.g., file not found
+             e.printStackTrace()
+         } finally {
+             inputStream?.close()
+         }
 
-        try {
-            inputStream = contentResolver.openInputStream(uri)
-            bitmap = BitmapFactory.decodeStream(inputStream)
-        } catch (e: Exception) {
-            // Handle exceptions, e.g., file not found
-            e.printStackTrace()
-        } finally {
-            inputStream?.close()
-        }
-
-        return bitmap
+         bitmap
+     }
 
 }
 
 
-fun bitmapToBase64(bitmap: Bitmap): String {
+suspend fun bitmapToBase64(bitmap: Bitmap): String {
    var base64value=""
-    val resizedBitmap = resizeBitmap(bitmap, 800, 800) // Change width and height as needed
+    return withContext(Dispatchers.IO) {
+        val resizedBitmap = resizeBitmap(bitmap, 800, 800) // Change width and height as needed
 
-    val byteArrayOutputStream = ByteArrayOutputStream()
-    resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
-    val byteArray = byteArrayOutputStream.toByteArray()
-    return  Base64.encodeToString(byteArray, Base64.DEFAULT)
+        val byteArrayOutputStream = ByteArrayOutputStream()
+        resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream)
+        val byteArray = byteArrayOutputStream.toByteArray()
+        Base64.encodeToString(byteArray, Base64.DEFAULT)
+    }
 
 }
 
@@ -1518,101 +1521,105 @@ fun BottomMenuColumn(
                                it, "sample_image")
                        }*/
 
-
-                        val editorContent = EditorContent(
-                            texts = contents.filterIsInstance<Content.Text>().map {
-                                val sampleBitmap = selectedImageURI?.let { getBitmapFromUri(context, it) }
-                                val uri= sampleBitmap?.let { bitmapToBase64(it) }
-                                TextContent(
-                                    text = it.text,
-                                    color = selectedFontcolor,
-                                    fontSize = selectedFontSize,
-                                    isBold = isBold,
-                                    isItalic = isItalic,
-                                    fontFamily = selectedFontFamily,
-                                    selectedImageURL = selectedImageURL,
-                                    selectedImageURI = uri.toString(),
-                                    isUnderline=isUnderline
-                                )
-                            },
-                            images = contents.filterIsInstance<Content.Image>().map {
-                                val sampleBitmap = it.uri?.let { getBitmapFromUri(context, it) }
-                                val uri= sampleBitmap?.let { bitmapToBase64(it) }
-                                ImageContent(uri = uri.toString())
-                            },
-                            audios = contents.filterIsInstance<Content.Audio>().map {
-                                ImageContent(uri = it.uri.toString())
-                            },
-                            videos = contents.filterIsInstance<Content.Video>().map {
-                                ImageContent(uri = it.uri.toString())
-                            },
-                            chartData = barChartData?.let {
-                                BarChartData(it.labels, it.dataPoints)
-                            }
-                        )
-
-
-
+                        CoroutineScope(Dispatchers.Main).launch {
+                            val editorContent = EditorContent(
+                                texts = contents.filterIsInstance<Content.Text>().map {
+                                    val sampleBitmap =
+                                        selectedImageURI?.let { getBitmapFromUri(context, it) }
+                                    val uri = sampleBitmap?.let { bitmapToBase64(it) }
+                                    TextContent(
+                                        text = it.text,
+                                        color = selectedFontcolor,
+                                        fontSize = selectedFontSize,
+                                        isBold = isBold,
+                                        isItalic = isItalic,
+                                        fontFamily = selectedFontFamily,
+                                        selectedImageURL = selectedImageURL,
+                                        selectedImageURI = uri.toString(),
+                                        isUnderline = isUnderline
+                                    )
+                                },
+                                images = contents.filterIsInstance<Content.Image>().map {
+                                    val sampleBitmap = it.uri?.let { getBitmapFromUri(context, it) }
+                                    val uri = sampleBitmap?.let { bitmapToBase64(it) }
+                                    ImageContent(uri = uri.toString())
+                                },
+                                audios = contents.filterIsInstance<Content.Audio>().map {
+                                    ImageContent(uri = it.uri.toString())
+                                },
+                                videos = contents.filterIsInstance<Content.Video>().map {
+                                    ImageContent(uri = it.uri.toString())
+                                },
+                                chartData = barChartData?.let {
+                                    BarChartData(it.labels, it.dataPoints)
+                                }
+                            )
 
 
+                            val serializedData = serializeEditorContent(editorContent)
 
-                        val serializedData = serializeEditorContent(editorContent)
+                            // Log.i("DesignActivity", "save $serializedData")
 
-                       // Log.i("DesignActivity", "save $serializedData")
-
-                        saveToSharedPreferences(context = context, "editorContent", serializedData)
+                            saveToSharedPreferences(
+                                context = context,
+                                "editorContent",
+                                serializedData
+                            )
+                        }
 
                     } else if (item.title.equals("Open")) {
-                        val jsonData = loadFromSharedPreferences(context, "editorContent")
-                        jsonData?.let {
-                            val editorContent = deserializeEditorContent(it)
+                        CoroutineScope(Dispatchers.Main).launch {
+                            val jsonData = loadFromSharedPreferences(context, "editorContent")
+                            jsonData?.let {
+                                val editorContent = deserializeEditorContent(it)
 
-                            editorContent?.let {
-                                for(imageitem in it.images){
-                                    onImageChange(Uri.parse(imageitem.uri))
-                                }
+                                editorContent?.let {
+                                    for (imageitem in it.images) {
+                                        onImageChange(Uri.parse(imageitem.uri))
+                                    }
 
-                                for (videoitem in it.videos){
-                                    onVideoChange(Uri.parse(videoitem.uri))
-                                }
-
-
-                                for (audioitem in it.audios){
-                                    onAudioChange(Uri.parse(audioitem.uri))
-                                }
+                                    for (videoitem in it.videos) {
+                                        onVideoChange(Uri.parse(videoitem.uri))
+                                    }
 
 
+                                    for (audioitem in it.audios) {
+                                        onAudioChange(Uri.parse(audioitem.uri))
+                                    }
 
 
-                                onTextChange(
-                                    it.texts.get(0).text
-                                )
-                                //  imagePickerLauncher.launch("image/*")
-                                onFontSizeChange(it.texts.get(0).fontSize)
-                                onBoldChange(it.texts.get(0).isBold)
-                                onItalicChange(it.texts.get(0).isItalic)
-                                onFontChange(it.texts.get(0).fontFamily)
-                                onUnderLineChange(it.texts.get(0).isUnderline)
-                                onFontColorChange(it.texts.get(0).color)
-
-                                onImageSelectURL(it.texts.get(0).selectedImageURL)
-
-                                onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
-
-                                if (it.texts.get(0).selectedImageURI != null) {
-                                    onSetBgImage(true)
-                                }
 
 
-                                it.chartData?.let { it1 -> onBarChartDataChange(it1) }
-                               // showDialog = false
+                                    onTextChange(
+                                        it.texts.get(0).text
+                                    )
+                                    //  imagePickerLauncher.launch("image/*")
+                                    onFontSizeChange(it.texts.get(0).fontSize)
+                                    onBoldChange(it.texts.get(0).isBold)
+                                    onItalicChange(it.texts.get(0).isItalic)
+                                    onFontChange(it.texts.get(0).fontFamily)
+                                    onUnderLineChange(it.texts.get(0).isUnderline)
+                                    onFontColorChange(it.texts.get(0).color)
 
-                               /* Log.i(
+                                    onImageSelectURL(it.texts.get(0).selectedImageURL)
+
+                                    onImageSelectedURI(Uri.parse(it.texts.get(0).selectedImageURI))
+
+                                    if (it.texts.get(0).selectedImageURI != null) {
+                                        onSetBgImage(true)
+                                    }
+
+
+                                    it.chartData?.let { it1 -> onBarChartDataChange(it1) }
+                                    // showDialog = false
+
+                                    /* Log.i(
                                     "DesignActivity",
                                     "editorContent $editorContent ${contents.size}"
                                 )*/
 
-                                // Set other properties like barChartData, etc.
+                                    // Set other properties like barChartData, etc.
+                                }
                             }
                         }
                     } else if (item.title.equals("Background Color")) {
