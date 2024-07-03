@@ -459,8 +459,7 @@ fun RequestPermissions() {
     val permissions = listOf(
         android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
         android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        android.Manifest.permission.READ_MEDIA_IMAGES,
-        android.Manifest.permission.CAMERA
+        android.Manifest.permission.READ_MEDIA_IMAGES
     )
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -469,11 +468,11 @@ fun RequestPermissions() {
         val allPermissionsGranted = permissionsMap.entries.all { it.value }
         if (!allPermissionsGranted) {
             // Handle the case where some permissions are not granted
-            Toast.makeText(
+            /*Toast.makeText(
                 context,
                 "Permissions are required for this app to function",
                 Toast.LENGTH_LONG
-            ).show()
+            ).show()*/
         }
     }
 
